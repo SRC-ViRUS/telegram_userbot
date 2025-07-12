@@ -1,6 +1,4 @@
-import asyncio
-import os
-import datetime
+import asyncio, os, datetime
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.errors import FloodWaitError
@@ -11,60 +9,55 @@ from telethon.tl.functions.messages import GetFullChatRequest
 # بيانات الاتصال
 api_id = 11765349
 api_hash = '67d3351652cc42239a42df8c17186d49'
-session_string = "1ApWapzMBu3LbcZl_ZaB1NarDuo3EmApdJbr4sseU-pxJwoSnVt6M9BkgJ07IPt_6h4fDH6xGKqkxWJOPg3QnRFsucx8TAfxX5HVJgDdvlVbnkpCrl1ixinR7nVSoF_ydbgsu884_g9HY0wN3iHJ8ARmF0olQIIgC2YomNJbmXmigp_uJximTE1tZAQJDLJc_Qsp3TuT4trb7txpPSP0d6DUEt6pdmxlWrCNLH7VRntWchwIUg-IjAlF1Mz8dhkDP5MLDuIbd2qV5xizf2I0sdTiUSwwohES769qMKg_K4SEnwNQybqlZmCpPTGm5xuN8AIkJ8NveU4UezgFGSwW0l5qNaJiGUPw="  # اختصرته للعرض
+session_string = "1ApWapzMBu3LbcZl_..."  # ← غيّره بجلسة حسابك
 
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 os.makedirs("downloads", exist_ok=True)
 
-# المتغيرات
+# متغيرات
 muted_private = set()
 muted_groups = {}
-welcome_enabled = {}
-welcome_message = {}
-clone_list = set()
-auto_name = True
+previous_name = None
 
-# --------- تغيير الاسم الوقتي ---------
-async def update_name_loop():
-    while True:
-        if auto_name:
-            now = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)
-            name = now.strftime('%I:%M')
-            try:
-                await client(UpdateProfileRequest(first_name=name))
-            except FloodWaitError as e:
-                await asyncio.sleep(e.seconds)
-            except Exception:
-                pass
-        await asyncio.sleep(60)
-
-# --------- أوامر الاسم ---------
-@client.on(events.NewMessage(pattern=r"\.تشغيل الاسم"))
-async def start_auto_name(event):
-    global auto_name
-    auto_name = True
-    msg = await event.edit("✅ تم تشغيل الاسم الوقتي.")
-    await asyncio.sleep(1)
-    await msg.delete()
-
-@client.on(events.NewMessage(pattern=r"\.ايقاف الاسم"))
-async def stop_auto_name(event):
-    global auto_name
-    auto_name = False
-    msg = await event.edit("🛑 تم إيقاف الاسم الوقتي.")
-    await asyncio.sleep(1)
-    await msg.delete()
-
-# --------- أمر فحص ---------
-@client.on(events.NewMessage(pattern=r"\.فحص"))
-async def ping(event):
+# --------- تغيير الاسم مؤقتاً ---------
+@client.on(events.NewMessage(pattern=r"\.اسم مؤقت"))
+async def change_name_once(event):
+    global previous_name
     try:
-        msg = await event.edit("✅ البوت شغال وبأفضل حال!")
-        await client.send_message("me", "✨ حياتي الصعب، البوت شغال.")
-        await asyncio.sleep(10)
+        me = await client.get_me()
+        previous_name = me.first_name
+        now = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)
+        name = now.strftime('%I:%M')
+        await client(UpdateProfileRequest(first_name=name))
+        msg = await event.edit(f"✅ تم تغيير الاسم مؤقتًا إلى: {name}")
+        await asyncio.sleep(1)
         await msg.delete()
     except FloodWaitError as e:
         await asyncio.sleep(e.seconds)
+    except Exception as err:
+        await event.reply(f"خطأ: {err}")
+
+@client.on(events.NewMessage(pattern=r"\.ايقاف الاسم"))
+async def revert_name(event):
+    global previous_name
+    if previous_name:
+        try:
+            await client(UpdateProfileRequest(first_name=previous_name))
+            msg = await event.edit("🛑 تم إرجاع الاسم السابق.")
+            await asyncio.sleep(1)
+            await msg.delete()
+        except Exception as e:
+            await event.reply(f"خطأ: {e}")
+    else:
+        await event.reply("❌ لا يوجد اسم محفوظ لإرجاعه.")
+
+# --------- فحص ---------
+@client.on(events.NewMessage(pattern=r"\.فحص"))
+async def ping(event):
+    msg = await event.edit("✅ البوت شغال وبأفضل حال!")
+    await client.send_message("me", "✨ حياتي الصعب، البوت شغال.")
+    await asyncio.sleep(10)
+    await msg.delete()
 
 # --------- كشف معلومات القروب أو القناة ---------
 @client.on(events.NewMessage(pattern=r"\.كشف"))
@@ -83,24 +76,15 @@ async def cmd_kashf(event):
             id_ = full.chats[0].id
             members_count = len(full.full_chat.participants)
             about = full.full_chat.about or "لا يوجد وصف"
-    except Exception:
+    except:
         title = getattr(chat, 'title', '❌')
         id_ = getattr(chat, 'id', '❌')
         members_count = "❌"
         about = "❌"
-    text = (f"📊 معلومات:\n"
-            f"🔹 الاسم: {title}\n"
-            f"🔹 الايدي: `{id_}`\n"
-            f"🔹 عدد الأعضاء: {members_count}\n"
-            f"🔹 الوصف:\n{about}")
+    text = f"📊 معلومات:\n🔹 الاسم: {title}\n🔹 الايدي: `{id_}`\n🔹 عدد الأعضاء: {members_count}\n🔹 الوصف:\n{about}"
     await event.reply(text)
 
-# --------- قائمة الأوامر ---------
-@client.on(events.NewMessage(pattern=r"\.اوامر"))
-async def list_commands(event):
-    await event.respond("🧠 أوامر البوت:\n.فحص\n.كشف\n.كتم\n.الغاء الكتم\n.تشغيل الاسم\n.ايقاف الاسم\n.قائمة الكتم\n.مسح الكتم")
-
-# --------- كتم / فك / عرض الكتم ---------
+# --------- كتم / فك كتم ---------
 @client.on(events.NewMessage(pattern=r"\.كتم$", func=lambda e: e.is_reply))
 async def mute_user(event):
     reply = await event.get_reply_message()
@@ -153,7 +137,7 @@ async def clear_mutes(event):
     await asyncio.sleep(1)
     await msg.delete()
 
-# --------- حذف رسائل المكتومين + حفظ الوسائط المؤقتة ---------
+# --------- حذف رسائل المكتومين وحفظ الوسائط ---------
 @client.on(events.NewMessage(incoming=True))
 async def handle_incoming(event):
     if (event.is_private and event.sender_id in muted_private) or \
@@ -167,10 +151,14 @@ async def handle_incoming(event):
         except:
             pass
 
+# --------- عرض الأوامر ---------
+@client.on(events.NewMessage(pattern=r"\.اوامر"))
+async def list_commands(event):
+    await event.respond("🧠 أوامر البوت:\n.فحص\n.كشف\n.كتم\n.الغاء الكتم\n.اسم مؤقت\n.ايقاف الاسم\n.قائمة الكتم\n.مسح الكتم")
+
 # --------- تشغيل البوت ---------
 async def main():
     await client.start()
-    asyncio.create_task(update_name_loop())
     print("✅ البوت يعمل الآن.")
     await client.run_until_disconnected()
 
