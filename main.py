@@ -18,47 +18,53 @@ os.makedirs("downloads", exist_ok=True)
 muted_private = set()
 muted_groups = {}
 previous_name = None
+change_name_task = None  # مهمة تغيير الاسم التلقائي
 
 # دالة للتحقق من صاحب البوت (مالك)
 async def is_owner(event):
     me = await client.get_me()
     return event.sender_id == me.id
 
-# --------- تغيير الاسم مؤقتاً ---------
-@client.on(events.NewMessage(pattern=r"\.اسم مؤقت"))
-async def change_name_once(event):
+# --------- تغيير الاسم تلقائيًا كل دقيقة ---------
+async def change_name_periodically():
     global previous_name
-    if not await is_owner(event):
-        return await event.reply("🚫 هذا الأمر خاص بالمالك فقط.")
-    try:
-        me = await client.get_me()
-        previous_name = me.first_name
+    me = await client.get_me()
+    previous_name = me.first_name
+    while True:
         now = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)
         name = now.strftime('%I:%M')
-        await client(UpdateProfileRequest(first_name=name))
-        msg = await event.edit(f"✅ تم تغيير الاسم مؤقتًا إلى: {name}")
-        await asyncio.sleep(1)
-        await msg.delete()
-    except FloodWaitError as e:
-        await asyncio.sleep(e.seconds)
-    except Exception as err:
-        await event.reply(f"خطأ: {err}")
+        try:
+            await client(UpdateProfileRequest(first_name=name))
+        except Exception as e:
+            print(f"خطأ بتغيير الاسم: {e}")
+        await asyncio.sleep(60)
 
-@client.on(events.NewMessage(pattern=r"\.ايقاف الاسم"))
-async def revert_name(event):
-    global previous_name
+@client.on(events.NewMessage(pattern=r"\.اسم مؤقت"))
+async def start_changing_name(event):
+    global change_name_task
     if not await is_owner(event):
         return await event.reply("🚫 هذا الأمر خاص بالمالك فقط.")
+    if change_name_task and not change_name_task.done():
+        return await event.reply("🔄 تغيير الاسم التلقائي مفعل مسبقًا.")
+    change_name_task = asyncio.create_task(change_name_periodically())
+    await event.reply("✅ بدأ تغيير الاسم التلقائي كل دقيقة.")
+
+@client.on(events.NewMessage(pattern=r"\.ايقاف الاسم"))
+async def stop_changing_name(event):
+    global change_name_task, previous_name
+    if not await is_owner(event):
+        return await event.reply("🚫 هذا الأمر خاص بالمالك فقط.")
+    if change_name_task:
+        change_name_task.cancel()
+        change_name_task = None
     if previous_name:
         try:
             await client(UpdateProfileRequest(first_name=previous_name))
-            msg = await event.edit("🛑 تم إرجاع الاسم السابق.")
-            await asyncio.sleep(1)
-            await msg.delete()
+            await event.reply("🛑 تم إيقاف تغيير الاسم وإرجاع الاسم السابق.")
         except Exception as e:
             await event.reply(f"خطأ: {e}")
     else:
-        await event.reply("❌ لا يوجد اسم محفوظ لإرجاعه.")
+        await event.reply("❌ لا يوجد اسم سابق محفوظ.")
 
 # --------- فحص ---------
 @client.on(events.NewMessage(pattern=r"\.فحص"))
@@ -185,9 +191,8 @@ async def list_commands(event):
         ".الغاء الكتم - فك كتم المستخدم (بالرد على رسالته)\n"
         ".قائمة الكتم - عرض جميع المستخدمين المكتومين\n"
         ".مسح الكتم - إزالة جميع الكتم\n"
-        ".تشغيل الاسم - تفعيل تغيير الاسم التلقائي حسب الوقت\n"
-        ".ايقاف الاسم - إيقاف تغيير الاسم التلقائي\n"
-        ".اسم مؤقت - تغيير الاسم مرة واحدة إلى الوقت الحالي\n"
+        ".اسم مؤقت - تشغيل تغيير الاسم التلقائي حسب الوقت (كل دقيقة)\n"
+        ".ايقاف الاسم - إيقاف تغيير الاسم وإرجاع الاسم السابق\n"
     )
     await event.respond(commands_text)
 
