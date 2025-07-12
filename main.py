@@ -1,22 +1,22 @@
 import asyncio
+import os
+import datetime
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.errors import FloodWaitError
 from telethon.tl.functions.account import UpdateProfileRequest
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import GetFullChatRequest
-import os
-import datetime
 
 # بيانات الاتصال
 api_id = 11765349
 api_hash = '67d3351652cc42239a42df8c17186d49'
-session_string = "1ApWapzMBu3LbcZl_ZaB1NarDuo3EmApdJbr4sseU-pxJwoSnVt6M9BkgJ07IPt_6h4fDH6xGKqkxWJOPg3QnRFsucx8TAfxX5HVJgDdvlVbnkpCrl1ixinR7nVSoF_ydbgsu884_g9HY0wN3iHJ8ARmF0olQIIgC2YomNJbmXmigp_uJximTE1tZAQJDLJc_Qsp3TuT4trb7txpPSP0d6DUEt6pdmxlWrCNLH7VRntWchwIUg-IjAlF1Mz8dhkDP5MLDuIbd2qV5xizf2I0sdTiUSwwohES769qMKg_K4SEnwNQybqlZmCpPTGm5xuN8AIkJ8NveU4UezgFGSwW0l5qNaJiGUPw=" 
-client = TelegramClient(StringSession(session_string), api_id, api_hash) # استبدله بجلسة حقيقية
+session_string = "1ApWapzMBu3LbcZl_ZaB1NarDuo3EmApdJbr4sseU-..."  # اختصرته للعرض
+
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 os.makedirs("downloads", exist_ok=True)
 
-# متغيرات
+# المتغيرات
 muted_private = set()
 muted_groups = {}
 welcome_enabled = {}
@@ -24,7 +24,7 @@ welcome_message = {}
 clone_list = set()
 auto_name = True
 
-# --------- تحديث الاسم الوقتي ---------
+# --------- تغيير الاسم الوقتي ---------
 async def update_name_loop():
     while True:
         if auto_name:
@@ -38,7 +38,7 @@ async def update_name_loop():
                 pass
         await asyncio.sleep(60)
 
-# --------- الأوامر ---------
+# --------- أوامر الاسم ---------
 @client.on(events.NewMessage(pattern=r"\.تشغيل الاسم"))
 async def start_auto_name(event):
     global auto_name
@@ -55,6 +55,7 @@ async def stop_auto_name(event):
     await asyncio.sleep(1)
     await msg.delete()
 
+# --------- أمر فحص ---------
 @client.on(events.NewMessage(pattern=r"\.فحص"))
 async def ping(event):
     try:
@@ -65,6 +66,7 @@ async def ping(event):
     except FloodWaitError as e:
         await asyncio.sleep(e.seconds)
 
+# --------- كشف معلومات القروب أو القناة ---------
 @client.on(events.NewMessage(pattern=r"\.كشف"))
 async def cmd_kashf(event):
     chat = await event.get_chat()
@@ -93,32 +95,31 @@ async def cmd_kashf(event):
             f"🔹 الوصف:\n{about}")
     await event.reply(text)
 
+# --------- قائمة الأوامر ---------
 @client.on(events.NewMessage(pattern=r"\.اوامر"))
 async def list_commands(event):
-    await event.respond("🧠 أوامر البوت:\n.فحص\n.كشف\n.كتم\n.الغاء الكتم\n.تشغيل الاسم\n.ايقاف الاسم\nوغيرها...")
+    await event.respond("🧠 أوامر البوت:\n.فحص\n.كشف\n.كتم\n.الغاء الكتم\n.تشغيل الاسم\n.ايقاف الاسم\n.قائمة الكتم\n.مسح الكتم")
 
 # --------- كتم / فك / عرض الكتم ---------
 @client.on(events.NewMessage(pattern=r"\.كتم$", func=lambda e: e.is_reply))
 async def mute_user(event):
     reply = await event.get_reply_message()
-    if not reply:
-        return
-    uid, cid = reply.sender_id, event.chat_id
-    (muted_private if event.is_private else muted_groups.setdefault(cid, set())).add(uid)
-    msg = await event.edit("🔇 تم الكتم.")
-    await asyncio.sleep(1)
-    await msg.delete()
+    if reply:
+        uid, cid = reply.sender_id, event.chat_id
+        (muted_private if event.is_private else muted_groups.setdefault(cid, set())).add(uid)
+        msg = await event.edit("🔇 تم الكتم.")
+        await asyncio.sleep(1)
+        await msg.delete()
 
 @client.on(events.NewMessage(pattern=r"\.الغاء الكتم$", func=lambda e: e.is_reply))
 async def unmute_user(event):
     reply = await event.get_reply_message()
-    if not reply:
-        return
-    uid, cid = reply.sender_id, event.chat_id
-    (muted_private if event.is_private else muted_groups.get(cid, set())).discard(uid)
-    msg = await event.edit("🔊 تم فك الكتم.")
-    await asyncio.sleep(1)
-    await msg.delete()
+    if reply:
+        uid, cid = reply.sender_id, event.chat_id
+        (muted_private if event.is_private else muted_groups.get(cid, set())).discard(uid)
+        msg = await event.edit("🔊 تم فك الكتم.")
+        await asyncio.sleep(1)
+        await msg.delete()
 
 @client.on(events.NewMessage(pattern=r"\.قائمة الكتم$"))
 async def list_muted(event):
@@ -127,16 +128,21 @@ async def list_muted(event):
         try:
             user = await client.get_entity(uid)
             text += f"🔸 خاص: {user.first_name}\n"
-        except: continue
+        except:
+            continue
     for cid, users in muted_groups.items():
         if users:
-            chat = await client.get_entity(cid)
-            text += f"\n🔹 {chat.title}:\n"
-            for uid in users:
-                try:
-                    user = await client.get_entity(uid)
-                    text += f" - {user.first_name}\n"
-                except: continue
+            try:
+                chat = await client.get_entity(cid)
+                text += f"\n🔹 {chat.title}:\n"
+                for uid in users:
+                    try:
+                        user = await client.get_entity(uid)
+                        text += f" - {user.first_name}\n"
+                    except:
+                        continue
+            except:
+                continue
     await event.respond(text or "لا يوجد مكتومين.")
 
 @client.on(events.NewMessage(pattern=r"\.مسح الكتم$"))
@@ -158,7 +164,8 @@ async def handle_incoming(event):
             path = await event.download_media("downloads/")
             await client.send_file("me", path, caption="📸 تم حفظ البصمة.")
             os.remove(path)
-        except: pass
+        except:
+            pass
 
 # --------- تشغيل البوت ---------
 async def main():
