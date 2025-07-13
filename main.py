@@ -1,5 +1,27 @@
 # -*- coding: utf-8 -*-
-import os, asyncio, datetime
+"""
+بوت تيليجرام متكامل بقوة ومميزات عديدة
+المطور: الصعب
+حقوق النشر: © 2025 الصعب. كل الحقوق محفوظة.
+----------------------------------------
+الميزات:
+- تغيير الاسم المؤقت كل دقيقة حسب توقيت بغداد
+- تغيير اسم قناة مؤقت كل دقيقة
+- كتم وفك كتم في الخاص والجروبات مع قائمة ومسح الكتم
+- تقليد متطور: 
+    * يقلد كل شيء في الخاص (نص، صور، فيديو، بصمات، ملفات مؤقتة...)
+    * يقلد نصوص فقط في المجموعات (لتجنب التعقيدات)
+- ترحيب قابل للتخصيص مع متغير {اسم} لاسم العضو
+- قائمة أوامر شاملة مرتبة وجاهزة للعرض
+- منع التكرار والسبام في الأوامر
+- حذف رسائل الأوامر بعد ثواني لتخفيف الفوضى
+
+لتشغيل البوت: عدل api_id, api_hash, وsession_string فقط.
+"""
+
+import os
+import asyncio
+import datetime
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.functions.account import UpdateProfileRequest
@@ -9,12 +31,14 @@ from telethon.errors import ChatAdminRequiredError
 # ───── بيانات الاتصال ─────
 api_id = 20507759
 api_hash = "225d3a24d84c637b3b816d13cc7bd766"
-session_string = ("1ApWapzMBu6vOgZU6ORszv7oDvb1YG3qw4PPoXdP1vaUkL6RH7lWG3Rj3Vt3-ai2"
-                  "kyID0DGo-ZZVtB-fMlRd-nD-AO2-w1Q9qqO3qqp1TzJ21CvwJwL6yo2yavX2BHP"
-                  "HEBiWrEDiHqO01g1zY4t_Kf7dA-01qZqBCzRmDir6htC1VmFkY-GUXUQSqRgskQu"
-                  "3mz42hC-GHQmp-6sc-GRDgOQj_p5CcziJQNUg8wxoMdQlr8tAGBySMM_EPkUXSgK"
-                  "Vts4iphZ3jVf_bLnBoj2DiugSN9VKJUhEA7R0cOvlpuC88huj4mUypaJ5OnO-aEg"
-                  "hyN5--kFl3hrVVBtmLnGOBuRRloAKxZsY=")
+session_string = (
+    "1ApWapzMBu6vOgZU6ORszv7oDvb1YG3qw4PPoXdP1vaUkL6RH7lWG3Rj3Vt3-ai2"
+    "kyID0DGo-ZZVtB-fMlRd-nD-AO2-w1Q9qqO3qqp1TzJ21CvwJwL6yo2yavX2BHP"
+    "HEBiWrEDiHqO01g1zY4t_Kf7dA-01qZqBCzRmDir6htC1VmFkY-GUXUQSqRgskQu"
+    "3mz42hC-GHQmp-6sc-GRDgOQj_p5CcziJQNUg8wxoMdQlr8tAGBySMM_EPkUXSgK"
+    "Vts4iphZ3jVf_bLnBoj2DiugSN9VKJUhEA7R0cOvlpuC88huj4mUypaJ5OnO-aEg"
+    "hyN5--kFl3hrVVBtmLnGOBuRRloAKxZsY="
+)
 
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 os.makedirs("downloads", exist_ok=True)
@@ -22,9 +46,13 @@ os.makedirs("downloads", exist_ok=True)
 # ───── متغيرات عامة ─────
 muted_private = set()
 muted_groups = {}
-imitate_user_id, last_imitated_message_id = None, None
-channel_name_tasks, change_name_task, previous_name = {}, None, None
-welcome_config, last_commands = {}, {}
+imitate_user_id = None
+last_imitated_message_id = None
+channel_name_tasks = {}
+change_name_task = None
+previous_name = None
+last_commands = {}
+welcome_config = {}  # {chat_id: {"enabled": bool, "message": str}}
 
 # ───── دوال مساعدة ─────
 def is_spamming(user_id, command, delay=1.5):
@@ -35,7 +63,7 @@ def is_spamming(user_id, command, delay=1.5):
     last_commands[key] = now
     return False
 
-def now_baghdad(fmt="%I:%M"):
+def now_baghdad(fmt="%I:%M %p"):
     return (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime(fmt)
 
 async def is_owner(event):
@@ -54,7 +82,7 @@ async def loop_name():
     while True:
         try:
             await client(UpdateProfileRequest(first_name=now_baghdad()))
-        except Exception:
+        except:
             pass
         await asyncio.sleep(60)
 
@@ -64,7 +92,7 @@ async def start_name(event):
         return
     global change_name_task
     if change_name_task and not change_name_task.done():
-        return await quick_edit(event, "✅ مفعّل مسبقًا.")
+        return await quick_edit(event, "✅ الاسم المؤقت مفعّل مسبقًا.")
     change_name_task = asyncio.create_task(loop_name())
     await quick_edit(event, "🕒 تم تفعيل الاسم المؤقت.")
 
@@ -79,7 +107,7 @@ async def stop_name(event):
     if previous_name:
         try:
             await client(UpdateProfileRequest(first_name=previous_name))
-        except Exception:
+        except:
             pass
     await quick_edit(event, "🛑 تم إيقاف الاسم المؤقت.")
 
@@ -91,10 +119,10 @@ async def start_channel_name(event):
     link = event.pattern_match.group(1).strip()
     try:
         channel = await client.get_entity(link)
-    except Exception:
+    except:
         return await quick_edit(event, "❌ رابط غير صالح.")
     if channel.id in channel_name_tasks:
-        return await quick_edit(event, "🔄 مفعّل مسبقًا.")
+        return await quick_edit(event, "🔄 الاسم المؤقت للقناة مفعّل مسبقًا.")
     prev_title = channel.title
 
     async def update_loop():
@@ -103,7 +131,7 @@ async def start_channel_name(event):
                 await client(EditTitleRequest(channel, now_baghdad()))
             except ChatAdminRequiredError:
                 break
-            except Exception:
+            except:
                 pass
             await asyncio.sleep(60)
 
@@ -118,14 +146,14 @@ async def stop_channel_name(event):
     link = event.pattern_match.group(1).strip()
     try:
         channel = await client.get_entity(link)
-    except Exception:
+    except:
         return await quick_edit(event, "❌ رابط غير صالح.")
     data = channel_name_tasks.pop(channel.id, None)
     if data:
         data["task"].cancel()
         try:
             await client(EditTitleRequest(data["entity"], data["prev"]))
-        except Exception:
+        except:
             pass
         await quick_edit(event, "🛑 تم إيقاف الاسم المؤقت للقناة.")
     else:
@@ -177,49 +205,11 @@ async def auto_delete_muted(event):
     if event.chat_id in muted_groups and event.sender_id in muted_groups[event.chat_id]:
         return await event.delete()
 
-# ───── تقليد ─────
+# ───── التقليد المتطور ─────
 @client.on(events.NewMessage(pattern=r"^\.تقليد$", func=lambda e: e.is_reply))
 async def imitate(event):
     if not await is_owner(event) or is_spamming(event.sender_id, ".تقليد"):
         return
+    reply = await event.get_reply_message()
     global imitate_user_id, last_imitated_message_id
-    r = await event.get_reply_message()
-    imitate_user_id, last_imitated_message_id = r.sender_id, None
-    await quick_edit(event, "✅ تم تفعيل التقليد.")
-
-@client.on(events.NewMessage(pattern=r"^\.ايقاف التقليد$"))
-async def stop_imitate(event):
-    if not await is_owner(event):
-        return
-    global imitate_user_id, last_imitated_message_id
-    imitate_user_id, last_imitated_message_id = None, None
-    await quick_edit(event, "🛑 تم إيقاف التقليد.")
-
-@client.on(events.NewMessage(incoming=True))
-async def do_imitate(event):
-    global imitate_user_id, last_imitated_message_id
-    if (imitate_user_id is None or event.sender_id != imitate_user_id
-            or event.id == last_imitated_message_id or event.out or event.via_bot_id):
-        return
-    try:
-        await event.reply(event.raw_text)
-        last_imitated_message_id = event.id
-    except Exception:
-        pass
-
-# ───── أمر فحص السّرعة ─────
-@client.on(events.NewMessage(pattern=r"^\.فحص$"))
-async def ping_handler(event):
-    if not await is_owner(event) or is_spamming(event.sender_id, ".فحص"):
-        return
-    start = datetime.datetime.now()
-    await event.edit("⏱️ جاري الفحص ...")
-    duration = (datetime.datetime.now() - start).total_seconds()
-    await event.edit(f"✅ البوت يعمل خلال `{duration:.2f}` ثانية.")
-    await asyncio.sleep(10)
-    await event.delete()
-
-# ───── تشغيل البوت ─────
-print("✅ تم تشغيل البوت بنجاح.")
-client.start()
-client.run_until_disconnected()
+    imitate_user_id = reply.sender
