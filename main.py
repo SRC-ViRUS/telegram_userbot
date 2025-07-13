@@ -8,7 +8,7 @@
 import os
 import asyncio
 import datetime
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, types
 from telethon.sessions import StringSession
 from telethon.tl.functions.account import UpdateProfileRequest
 from telethon.tl.functions.channels import EditTitleRequest
@@ -39,6 +39,7 @@ change_name_task = None
 previous_name = None
 last_commands = {}
 welcome_config = {}
+taqleed_dict = {}
 
 # ───── دوال مساعدة ─────
 def is_spamming(user_id, command, delay=1.5):
@@ -183,40 +184,60 @@ async def auto_delete_muted(event):
     if event.chat_id in muted_groups and event.sender_id in muted_groups[event.chat_id]:
         return await event.delete()
 
-# ───── التقليد الذكي (يرجع يرسل الرسالة كما هي، موقّتة أو لا) ─────
+# ───── التقليد (معدل حسب طلبك) ─────
 @client.on(events.NewMessage(pattern=r"^\.تقليد$", func=lambda e: e.is_reply))
-async def imitate(event):
+async def save_taqleed(event):
     if not await is_owner(event): return
     reply = await event.get_reply_message()
-    imitate_user_ids.add(reply.sender_id)
-    await quick_edit(event, f"🔁 جاري تقليده: {reply.sender_id}")
-
-@client.on(events.NewMessage(pattern=r"^\.ايقاف التقليد$"))
-async def stop_imitate(event):
-    if not await is_owner(event): return
-    imitate_user_ids.clear()
-    await quick_edit(event, "🛑 تم إيقاف التقليد.")
+    if not reply:
+        await quick_edit(event, "❗ الرجاء الرد على رسالة لتقليدها.")
+        return
+    sender_id = reply.sender_id
+    if event.is_private:
+        # حفظ كل انواع الرسائل
+        taqleed_dict[sender_id] = reply
+        await quick_edit(event, "✅ تم حفظ التقليد الكامل للخاص.")
+    elif event.is_group:
+        # في القروب تقلد فقط نص، بصمة، ملصق
+        if reply.text or reply.voice or reply.sticker:
+            taqleed_dict[sender_id] = reply
+            await quick_edit(event, "✅ تم حفظ التقليد (نص/بصمة/ملصق) في القروب.")
+        else:
+            await quick_edit(event, "⚠️ لا يمكن تقليد هذا النوع في القروب.")
 
 @client.on(events.NewMessage(incoming=True))
-async def imitate_user(event):
-    if event.sender_id not in imitate_user_ids:
-        return
-    last_id = last_imitated_message_ids.get(event.sender_id)
-    if event.id == last_id:
-        return
-    last_imitated_message_ids[event.sender_id] = event.id
-    try:
-        if event.media:
-            await event.forward_to(event.chat_id)
-        else:
-            await event.reply(event.raw_text or "")
-    except:
-        pass
+async def auto_taqleed(event):
+    if event.sender_id in taqleed_dict:
+        msg = taqleed_dict[event.sender_id]
+        # في الخاص نرجع نفس الرسالة
+        if event.is_private:
+            try:
+                # تجنب تكرار الرسالة نفسها
+                last_id = last_imitated_message_ids.get(event.sender_id)
+                if event.id == last_id:
+                    return
+                last_imitated_message_ids[event.sender_id] = event.id
+                await client.send_message(event.sender_id, msg)
+            except:
+                pass
+        # في القروب نرسل الرد فقط على نفس القروب إذا الرسالة ضمن القروب
+        elif event.is_group:
+            try:
+                await event.reply(msg)
+            except:
+                pass
 
-# ───── ترحيب تلقائي ─────
+@client.on(events.NewMessage(pattern=r"^\.ايقاف التقليد$"))
+async def stop_taqleed(event):
+    if not await is_owner(event): return
+    taqleed_dict.clear()
+    last_imitated_message_ids.clear()
+    await quick_edit(event, "🛑 تم إيقاف التقليد.")
+
+# ───── الترحيب التلقائي مع تخصيص رسالة ─────
 @client.on(events.ChatAction)
 async def welcome_new_user(event):
-    if not event.user_joined and not event.user_added:
+    if not (event.user_joined or event.user_added):
         return
     chat_id = event.chat_id
     config = welcome_config.get(chat_id)
@@ -244,15 +265,21 @@ async def set_welcome(event):
     welcome_config[event.chat_id] = {"enabled": True, "message": txt}
     await quick_edit(event, "📩 تم تحديث رسالة الترحيب.")
 
-# ───── حفظ الوسائط من الخاص (وليس من التقليد) ─────
-@client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private and e.media))
-async def save_media(event):
-    name = os.path.join("downloads", f"{event.id}")
-    try:
-        path = await event.download_media(file=name)
-        print(f"📥 تم حفظ الوسائط: {path}")
-    except Exception as e:
-        print(f"❌ خطأ بالحفظ: {e}")
+# ───── حفظ الوسائط المؤقتة من الخاص في الحافظة مع إسم أو ID المرسل ─────
+@client.on(events.NewMessage(incoming=True))
+async def save_temporary_media(event):
+    if not event.is_private or not event.media:
+        return
+    # تحقق من كونها ميديا موقّتة (ttl_seconds تعني مؤقتة)
+    ttl = getattr(event.media, "ttl_seconds", 0)
+    if ttl and ttl > 0:
+        sender = await event.get_sender()
+        name = f"@{sender.username}" if sender.username else f"ID: {sender.id}"
+        caption = f"📥 وسائط موقّتة من: {name}"
+        try:
+            await client.send_message("me", event.message, caption=caption)
+        except Exception as e:
+            print(f"❌ خطأ في حفظ الوسائط المؤقتة: {e}")
 
 # ───── كشف معلومات المجموعة ─────
 @client.on(events.NewMessage(pattern=r"^\.كشف$"))
@@ -269,7 +296,7 @@ async def group_info(event):
 """
     await quick_edit(event, msg.strip(), delay=10)
 
-# ───── أمر فحص وتشغيل ─────
+# ───── أمر فحص البوت ─────
 @client.on(events.NewMessage(pattern=r"^\.فحص$"))
 async def check_status(event):
     if not await is_owner(event): return
