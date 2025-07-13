@@ -1,205 +1,289 @@
+# -*- coding: utf-8 -*-
 import asyncio, os, datetime
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
-from telethon.errors import FloodWaitError
 from telethon.tl.functions.account import UpdateProfileRequest
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import GetFullChatRequest
+from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError
 
-# بيانات الاتصال
+# ========== بيانات الاتصال ==========
 api_id = 11765349
 api_hash = '67d3351652cc42239a42df8c17186d49'
-session_string = "1ApWapzMBu3LbcZl_ZaB1NarDuo3EmApdJbr4sseU-pxJwoSnVt6M9BkgJ07IPt_6h4fDH6xGKqkxWJOPg3QnRFsucx8TAfxX5HVJgDdvlVbnkpCrl1ixinR7nVSoF_ydbgsu884_g9HY0wN3iHJ8ARmF0olQIIgC2YomNJbmXmigp_uJximTE1tZAQJDLJc_Qsp3TuT4trb7txpPSP0d6DUEt6pdmxlWrCNLH7VRntWchwIUg-IjAlF1Mz8dhkDP5MLDuIbd2qV5xizf2I0sdTiUSwwohES769qMKg_K4SEnwNQybqlZmCpPTGm5xuN8AIkJ8NveU4UezgFGSwW0l5qNaJiGUPw="
+session_string = "1ApWapzMBu0ivnheKrzAuzLihTMiNKMOurFuPNZJnqUpQxByZCzW3pqY9n1L3u2tXJ8oBValiSz8eaK_2M4MBSyLfIetg1SpTm665HNI2vcHWjHaIrWeVGsYYIxIbrnuw8k4vZBOtskw1Lb6lAbBwFfU7ankI3bHNNwZ5jrEhidlP2qi77A53r9m-SoZmoPCcXMNd9TvTLDImAGxslVEtSEQJbfFTnb0LTcGVOfYePGbywRlDQnmFF0uuCRG03iy4eMVjXVQLgW2b_OcfFoWZqLuGDMQIqKxvmWnpL_cpG5hETUGtzbZBjT1Z447_g7FsQQcUeVmEaVpuNY5WLYXqPRbQr-3UUAk=" 
 
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 os.makedirs("downloads", exist_ok=True)
 
-# متغيرات
+# ========== متغيرات ==========
 muted_private = set()
 muted_groups = {}
 previous_name = None
-change_name_task = None  # مهمة تغيير الاسم التلقائي
+change_name_task = None
+channel_name_tasks = {}
 
-# دالة للتحقق من صاحب البوت (مالك)
+# ========== فحص المالك ==========
 async def is_owner(event):
     me = await client.get_me()
     return event.sender_id == me.id
 
-# --------- تغيير الاسم تلقائيًا كل دقيقة ---------
+# ========== توليد جلسة ==========
+@client.on(events.NewMessage(pattern=r"\.جلسة"))
+async def generate_session(event):
+    if not await is_owner(event): return
+    await event.respond("🔐 أرسل `api_id` الآن:")
+    response = await client.wait_for(events.NewMessage(from_users=event.sender_id))
+    api_id_user = int(response.text)
+
+    await event.respond("🔐 أرسل `api_hash` الآن:")
+    response = await client.wait_for(events.NewMessage(from_users=event.sender_id))
+    api_hash_user = response.text
+
+    await event.respond("📞 أرسل رقم هاتفك (مع +):")
+    response = await client.wait_for(events.NewMessage(from_users=event.sender_id))
+    phone = response.text
+
+    temp = TelegramClient(StringSession(), api_id_user, api_hash_user)
+    await temp.connect()
+
+    try:
+        sent = await temp.send_code_request(phone)
+        await event.respond("✉️ تم إرسال كود. أرسل الكود الآن:")
+        code = (await client.wait_for(events.NewMessage(from_users=event.sender_id))).text
+
+        try:
+            await temp.sign_in(phone, code)
+        except SessionPasswordNeededError:
+            await event.respond("🔒 الحساب فيه تحقق بخطوتين. أرسل كلمة السر:")
+            pw = (await client.wait_for(events.NewMessage(from_users=event.sender_id))).text
+            await temp.sign_in(password=pw)
+
+        string = temp.session.save()
+        await event.respond("✅ تم إنشاء الجلسة بنجاح.")
+        await client.send_message("me", f"✨ هذا هو StringSession:\n`{string}`")
+        await temp.disconnect()
+    except PhoneCodeInvalidError:
+        await event.respond("❌ كود التحقق غير صحيح.")
+    except Exception as e:
+        await event.respond(f"❌ حدث خطأ: {e}")
+    await event.delete()
+
+# ========== تغيير الاسم الشخصي حسب الوقت ==========
 async def change_name_periodically():
     global previous_name
     me = await client.get_me()
     previous_name = me.first_name
     while True:
-        now = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)
-        name = now.strftime('%I:%M')
+        name = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)).strftime('%I:%M')
         try:
             await client(UpdateProfileRequest(first_name=name))
-        except Exception as e:
-            print(f"خطأ بتغيير الاسم: {e}")
+        except: pass
         await asyncio.sleep(60)
 
 @client.on(events.NewMessage(pattern=r"\.اسم مؤقت"))
 async def start_changing_name(event):
+    if not await is_owner(event): return
     global change_name_task
-    if not await is_owner(event):
-        return await event.reply("🚫 هذا الأمر خاص بالمالك فقط.")
     if change_name_task and not change_name_task.done():
-        return await event.reply("🔄 تغيير الاسم التلقائي مفعل مسبقًا.")
+        return
     change_name_task = asyncio.create_task(change_name_periodically())
-    await event.reply("✅ بدأ تغيير الاسم التلقائي كل دقيقة.")
+    await event.delete()
 
 @client.on(events.NewMessage(pattern=r"\.ايقاف الاسم"))
 async def stop_changing_name(event):
+    if not await is_owner(event): return
     global change_name_task, previous_name
-    if not await is_owner(event):
-        return await event.reply("🚫 هذا الأمر خاص بالمالك فقط.")
     if change_name_task:
         change_name_task.cancel()
         change_name_task = None
     if previous_name:
-        try:
-            await client(UpdateProfileRequest(first_name=previous_name))
-            await event.reply("🛑 تم إيقاف تغيير الاسم وإرجاع الاسم السابق.")
-        except Exception as e:
-            await event.reply(f"خطأ: {e}")
-    else:
-        await event.reply("❌ لا يوجد اسم سابق محفوظ.")
+        try: await client(UpdateProfileRequest(first_name=previous_name))
+        except: pass
+    await event.delete()
 
-# --------- فحص ---------
+# ========== اسم مؤقت للقنوات والكروبات ==========
+@client.on(events.NewMessage(pattern=r"\.اسم قناة (.+)"))
+async def temp_channel_name(event):
+    if not await is_owner(event): return
+    link = event.pattern_match.group(1).strip()
+    try:
+        chat = await client.get_entity(link)
+    except Exception as e:
+        await event.respond(f"❌ الرابط غير صالح: {e}")
+        await event.delete()
+        return
+    cid = chat.id
+    if cid in channel_name_tasks:
+        await event.respond("🔄 التغيير مفعل مسبقًا.")
+        await event.delete()
+        return
+
+    prev_title = getattr(chat, "title", None)
+    try:
+        await client.edit_title(chat, datetime.datetime.now(datetime.timezone.utc).strftime('%I:%M'))
+    except:
+        await event.respond("🚫 لا أملك صلاحية تغيير الاسم.")
+        await event.delete()
+        return
+
+    async def updater():
+        try:
+            while True:
+                title = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)).strftime('%I:%M')
+                await client.edit_title(chat, title)
+                msgs = await client.get_messages(chat, limit=1)
+                if msgs and msgs[0].message is None:
+                    await msgs[0].delete()
+                await asyncio.sleep(60)
+        finally:
+            if prev_title:
+                try: await client.edit_title(chat, prev_title)
+                except: pass
+
+    task = asyncio.create_task(updater())
+    channel_name_tasks[cid] = {'task': task, 'prev': prev_title}
+    await event.respond("✅ بدأ التحديث التلقائي.")
+    await event.delete()
+
+@client.on(events.NewMessage(pattern=r"\.ايقاف اسم قناة (.+)"))
+async def stop_temp_channel_name(event):
+    if not await is_owner(event): return
+    link = event.pattern_match.group(1).strip()
+    try: chat = await client.get_entity(link)
+    except: await event.respond("❌ الرابط غير صالح."); return
+    data = channel_name_tasks.pop(chat.id, None)
+    if not data:
+        await event.respond("❌ لا يوجد تحديث نشط.")
+        return
+    data['task'].cancel()
+    if data['prev']:
+        try: await client.edit_title(chat, data['prev'])
+        except: pass
+    await event.respond("🛑 تم إيقاف الاسم التلقائي.")
+
+# ========== فحص ==========
 @client.on(events.NewMessage(pattern=r"\.فحص"))
-async def ping(event):
-    if not await is_owner(event):
-        return await event.reply("🚫 هذا الأمر خاص بالمالك فقط.")
-    msg = await event.edit("✅ البوت شغال وبأفضل حال!")
-    await client.send_message("me", "✨ حياتي الصعب، البوت شغال.")
+async def check(event):
+    if not await is_owner(event): return
+    start = datetime.datetime.now()
+    msg = await event.edit("⌛")
+    end = datetime.datetime.now()
+    await msg.edit(f"✅ البوت شغال\n📶 `{(end-start).microseconds//1000}ms`")
     await asyncio.sleep(10)
     await msg.delete()
 
-# --------- كشف معلومات القروب أو القناة ---------
+# ========== كشف معلومات ==========
 @client.on(events.NewMessage(pattern=r"\.كشف"))
-async def cmd_kashf(event):
-    if not await is_owner(event):
-        return await event.reply("🚫 هذا الأمر خاص بالمالك فقط.")
+async def get_info(event):
+    if not await is_owner(event): return
     chat = await event.get_chat()
     try:
         if getattr(chat, 'megagroup', False) or getattr(chat, 'broadcast', False):
             full = await client(GetFullChannelRequest(chat))
             title = full.chats[0].title
             id_ = full.chats[0].id
-            members_count = full.full_chat.participants_count
+            members = full.full_chat.participants_count
             about = full.full_chat.about or "لا يوجد وصف"
         else:
             full = await client(GetFullChatRequest(chat))
             title = full.chats[0].title
             id_ = full.chats[0].id
-            members_count = len(full.full_chat.participants)
+            members = len(full.full_chat.participants)
             about = full.full_chat.about or "لا يوجد وصف"
     except:
-        title = getattr(chat, 'title', '❌')
-        id_ = getattr(chat, 'id', '❌')
-        members_count = "❌"
-        about = "❌"
-    text = f"📊 معلومات:\n🔹 الاسم: {title}\n🔹 الايدي: `{id_}`\n🔹 عدد الأعضاء: {members_count}\n🔹 الوصف:\n{about}"
-    await event.reply(text)
+        title, id_, members, about = "❌", "❌", "❌", "❌"
+    await event.respond(f"📊 معلومات:\n🔹 الاسم: {title}\n🔹 الايدي: `{id_}`\n🔹 عدد الأعضاء: {members}\n🔹 الوصف:\n{about}")
+    await event.delete()
 
-# --------- كتم / فك كتم ---------
+# ========== كتم / فك كتم ==========
 @client.on(events.NewMessage(pattern=r"\.كتم$", func=lambda e: e.is_reply))
-async def mute_user(event):
-    if not await is_owner(event):
-        return await event.reply("🚫 هذا الأمر خاص بالمالك فقط.")
-    reply = await event.get_reply_message()
-    if reply:
-        uid, cid = reply.sender_id, event.chat_id
-        (muted_private if event.is_private else muted_groups.setdefault(cid, set())).add(uid)
-        msg = await event.edit("🔇 تم الكتم.")
-        await asyncio.sleep(1)
-        await msg.delete()
+async def mute(event):
+    if not await is_owner(event): return
+    r = await event.get_reply_message()
+    (muted_private if event.is_private else muted_groups.setdefault(event.chat_id, set())).add(r.sender_id)
+    await event.delete()
 
 @client.on(events.NewMessage(pattern=r"\.الغاء الكتم$", func=lambda e: e.is_reply))
-async def unmute_user(event):
-    if not await is_owner(event):
-        return await event.reply("🚫 هذا الأمر خاص بالمالك فقط.")
-    reply = await event.get_reply_message()
-    if reply:
-        uid, cid = reply.sender_id, event.chat_id
-        (muted_private if event.is_private else muted_groups.get(cid, set())).discard(uid)
-        msg = await event.edit("🔊 تم فك الكتم.")
-        await asyncio.sleep(1)
-        await msg.delete()
+async def unmute(event):
+    if not await is_owner(event): return
+    r = await event.get_reply_message()
+    (muted_private if event.is_private else muted_groups.get(event.chat_id, set())).discard(r.sender_id)
+    await event.delete()
 
 @client.on(events.NewMessage(pattern=r"\.قائمة الكتم$"))
-async def list_muted(event):
-    if not await is_owner(event):
-        return await event.reply("🚫 هذا الأمر خاص بالمالك فقط.")
+async def mute_list(event):
+    if not await is_owner(event): return
     text = "📋 المكتومين:\n"
     for uid in muted_private:
-        try:
-            user = await client.get_entity(uid)
-            text += f"🔸 خاص: {user.first_name}\n"
-        except:
-            continue
-    for cid, users in muted_groups.items():
-        if users:
-            try:
-                chat = await client.get_entity(cid)
-                text += f"\n🔹 {chat.title}:\n"
-                for uid in users:
-                    try:
-                        user = await client.get_entity(uid)
-                        text += f" - {user.first_name}\n"
-                    except:
-                        continue
-            except:
-                continue
+        try: user = await client.get_entity(uid)
+        except: continue
+        text += f"🔸 خاص: {user.first_name}\n"
+    for cid, uids in muted_groups.items():
+        try: chat = await client.get_entity(cid)
+        except: continue
+        text += f"\n🔹 {chat.title}:\n"
+        for uid in uids:
+            try: user = await client.get_entity(uid)
+            except: continue
+            text += f" - {user.first_name}\n"
     await event.respond(text or "لا يوجد مكتومين.")
+    await event.delete()
 
 @client.on(events.NewMessage(pattern=r"\.مسح الكتم$"))
-async def clear_mutes(event):
-    if not await is_owner(event):
-        return await event.reply("🚫 هذا الأمر خاص بالمالك فقط.")
+async def clear_mute(event):
+    if not await is_owner(event): return
     muted_private.clear()
     muted_groups.clear()
-    msg = await event.edit("🗑️ تم مسح المكتومين.")
-    await asyncio.sleep(1)
-    await msg.delete()
+    await event.delete()
 
-# --------- حذف رسائل المكتومين وحفظ الوسائط ---------
+# ========== تقليد متطور ==========
+@client.on(events.NewMessage(pattern=r"\.تقليد$", func=lambda e: e.is_reply))
+async def imitate_all(event):
+    if not await is_owner(event): return
+    reply = await event.get_reply_message()
+    if reply.media:
+        ttl = getattr(reply.media, 'ttl_seconds', None)
+        path = await reply.download_media("downloads/")
+        try:
+            await client.send_file(event.chat_id, path, caption=reply.text or "", ttl_seconds=ttl)
+        finally:
+            if os.path.exists(path): os.remove(path)
+    elif reply.text:
+        await event.respond(reply.text)
+    await event.delete()
+
+# ========== حفظ الوسائط المؤقتة ==========
 @client.on(events.NewMessage(incoming=True))
 async def handle_incoming(event):
     if (event.is_private and event.sender_id in muted_private) or \
        (event.chat_id in muted_groups and event.sender_id in muted_groups[event.chat_id]):
         return await event.delete()
-    if event.is_private and event.media and getattr(event.media, 'ttl_seconds', None):
-        try:
-            path = await event.download_media("downloads/")
-            await client.send_file("me", path, caption="📸 تم حفظ البصمة.")
-            os.remove(path)
-        except:
-            pass
+    if event.media and getattr(event.media, 'ttl_seconds', None):
+        path = await event.download_media("downloads/")
+        await client.send_file("me", path, caption="📸 تم الحفظ", ttl_seconds=event.media.ttl_seconds)
+        if os.path.exists(path): os.remove(path)
 
-# --------- عرض الأوامر ---------
+# ========== قائمة الأوامر ==========
 @client.on(events.NewMessage(pattern=r"\.اوامر"))
-async def list_commands(event):
-    if not await is_owner(event):
-        return await event.reply("🚫 هذا الأمر خاص بالمالك فقط.")
-    commands_text = (
-        "🧠 قائمة أوامر البوت:\n\n"
-        ".فحص - التحقق من أن البوت يعمل\n"
-        ".كشف - عرض معلومات القروب أو القناة\n"
-        ".كتم - كتم المستخدم (بالرد على رسالته)\n"
-        ".الغاء الكتم - فك كتم المستخدم (بالرد على رسالته)\n"
-        ".قائمة الكتم - عرض جميع المستخدمين المكتومين\n"
-        ".مسح الكتم - إزالة جميع الكتم\n"
-        ".اسم مؤقت - تشغيل تغيير الاسم التلقائي حسب الوقت (كل دقيقة)\n"
-        ".ايقاف الاسم - إيقاف تغيير الاسم وإرجاع الاسم السابق\n"
+async def cmds(event):
+    if not await is_owner(event): return
+    await event.respond(
+        "🧠 أوامر البوت:\n\n"
+        ".جلسة - توليد جلسة تليثون\n"
+        ".فحص - اختبار عمل البوت\n"
+        ".كشف - كشف معلومات الكروب/القناة\n"
+        ".كتم / .الغاء الكتم (بالرد)\n"
+        ".قائمة الكتم / .مسح الكتم\n"
+        ".اسم مؤقت / .ايقاف الاسم\n"
+        ".اسم قناة <رابط> / .ايقاف اسم قناة <رابط>\n"
+        ".تقليد (بالرد)\n"
     )
-    await event.respond(commands_text)
+    await event.delete()
 
-# --------- تشغيل البوت ---------
+# ========== تشغيل البوت ==========
 async def main():
     await client.start()
-    print("✅ البوت يعمل الآن.")
+    print("✅ البوت يعمل.")
     await client.run_until_disconnected()
 
 if __name__ == "__main__":
