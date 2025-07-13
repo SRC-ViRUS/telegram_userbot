@@ -32,8 +32,8 @@ os.makedirs("downloads", exist_ok=True)
 # ───── متغيرات عامة ─────
 muted_private = set()
 muted_groups = {}
-imitate_user_ids = set()  # لدعم تقليد أكثر من شخص
-last_imitated_message_ids = {}  # dict: user_id -> last msg id
+imitate_user_ids = set()  # دعم تقليد أكثر من شخص
+last_imitated_message_ids = {}  # لتتبع آخر رسالة مقلدة لكل مستخدم
 channel_name_tasks = {}
 change_name_task = None
 previous_name = None
@@ -214,7 +214,6 @@ async def imitate_user(event):
         if event.media:
             await event.reply(file=event.media, message=event.raw_text or None)
         else:
-            # إذا رسالة نص فقط أو غيرها
             await event.reply(event.raw_text or "")
     except Exception:
         pass
