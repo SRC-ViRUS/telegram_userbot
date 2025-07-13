@@ -3,20 +3,6 @@
 بوت تيليجرام متكامل بقوة ومميزات عديدة
 المطور: الصعب
 حقوق النشر: © 2025 الصعب. كل الحقوق محفوظة.
-----------------------------------------
-الميزات:
-- تغيير الاسم المؤقت كل دقيقة حسب توقيت بغداد
-- تغيير اسم قناة مؤقت كل دقيقة
-- كتم وفك كتم في الخاص والجروبات مع قائمة ومسح الكتم
-- تقليد متطور: 
-    * يقلد كل شيء في الخاص (نص، صور، فيديو، بصمات، ملفات مؤقتة...)
-    * يقلد نصوص فقط في المجموعات (لتجنب التعقيدات)
-- ترحيب قابل للتخصيص مع متغير {اسم} لاسم العضو
-- قائمة أوامر شاملة مرتبة وجاهزة للعرض
-- منع التكرار والسبام في الأوامر
-- حذف رسائل الأوامر بعد ثواني لتخفيف الفوضى
-
-لتشغيل البوت: عدل api_id, api_hash, وsession_string فقط.
 """
 
 import os
@@ -158,28 +144,24 @@ async def stop_channel_name(event):
         await quick_edit(event, "🛑 تم إيقاف الاسم المؤقت للقناة.")
     else:
         await quick_edit(event, "❌ لا يوجد تعديل نشط لهذه القناة.")
-
-# ───── كتم / فك كتم ─────
+       # ───── كتم / فك كتم ─────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def mute(event):
-    if not await is_owner(event) or is_spamming(event.sender_id, ".كتم"):
-        return
+    if not await is_owner(event): return
     r = await event.get_reply_message()
     (muted_private if event.is_private else muted_groups.setdefault(event.chat_id, set())).add(r.sender_id)
     await quick_edit(event, "🔇 تم كتمه.")
 
 @client.on(events.NewMessage(pattern=r"^\.الغاء الكتم$", func=lambda e: e.is_reply))
 async def unmute(event):
-    if not await is_owner(event) or is_spamming(event.sender_id, ".الغاء الكتم"):
-        return
+    if not await is_owner(event): return
     r = await event.get_reply_message()
     (muted_private if event.is_private else muted_groups.get(event.chat_id, set())).discard(r.sender_id)
     await quick_edit(event, "🔊 تم فك الكتم.")
 
 @client.on(events.NewMessage(pattern=r"^\.قائمة الكتم$"))
 async def mute_list(event):
-    if not await is_owner(event) or is_spamming(event.sender_id, ".قائمة الكتم"):
-        return
+    if not await is_owner(event): return
     lines = []
     if muted_private:
         lines.append("• خاص:")
@@ -192,8 +174,7 @@ async def mute_list(event):
 
 @client.on(events.NewMessage(pattern=r"^\.مسح الكتم$"))
 async def mute_clear(event):
-    if not await is_owner(event) or is_spamming(event.sender_id, ".مسح الكتم"):
-        return
+    if not await is_owner(event): return
     muted_private.clear()
     muted_groups.clear()
     await quick_edit(event, "🗑️ تم مسح جميع المكتومين.")
@@ -205,11 +186,129 @@ async def auto_delete_muted(event):
     if event.chat_id in muted_groups and event.sender_id in muted_groups[event.chat_id]:
         return await event.delete()
 
-# ───── التقليد المتطور ─────
+# ───── التقليد الذكي ─────
 @client.on(events.NewMessage(pattern=r"^\.تقليد$", func=lambda e: e.is_reply))
 async def imitate(event):
-    if not await is_owner(event) or is_spamming(event.sender_id, ".تقليد"):
-        return
+    global imitate_user_id
+    if not await is_owner(event): return
     reply = await event.get_reply_message()
+    imitate_user_id = reply.sender_id
+    await quick_edit(event, "🔁 جاري تقليده...")
+
+@client.on(events.NewMessage(pattern=r"^\.ايقاف التقليد$"))
+async def stop_imitate(event):
+    global imitate_user_id
+    if not await is_owner(event): return
+    imitate_user_id = None
+    await quick_edit(event, "🛑 تم إيقاف التقليد.")
+
+@client.on(events.NewMessage(incoming=True))
+async def imitate_user(event):
     global imitate_user_id, last_imitated_message_id
-    imitate_user_id = reply.sender
+    if not imitate_user_id or event.sender_id != imitate_user_id: return
+    if event.id == last_imitated_message_id: return
+    last_imitated_message_id = event.id
+    if event.is_private:
+        await event.reply(file=event.media or None, message=event.raw_text or None)
+    elif event.is_group and event.text:
+        await event.reply(event.text)
+
+# ───── ترحيب تلقائي ─────
+@client.on(events.ChatAction)
+async def welcome_new_user(event):
+    if not event.user_joined and not event.user_added:
+        return
+    chat_id = event.chat_id
+    config = welcome_config.get(chat_id)
+    if config and config.get("enabled", False):
+        user = await event.get_user()
+        msg = config.get("message", "اهلا {الاسم} 🌸").replace("{الاسم}", user.first_name)
+        await client.send_message(chat_id, msg)
+
+@client.on(events.NewMessage(pattern=r"^\.تفعيل الترحيب$"))
+async def enable_welcome(event):
+    if not await is_owner(event): return
+    welcome_config[event.chat_id] = {"enabled": True, "message": "اهلا {الاسم} 🌸"}
+    await quick_edit(event, "✅ تم تفعيل الترحيب.")
+
+@client.on(events.NewMessage(pattern=r"^\.تعطيل الترحيب$"))
+async def disable_welcome(event):
+    if not await is_owner(event): return
+    welcome_config[event.chat_id] = {"enabled": False}
+    await quick_edit(event, "🛑 تم تعطيل الترحيب.")
+
+@client.on(events.NewMessage(pattern=r"^\.وضع ترحيب (.+)$"))
+async def set_welcome(event):
+    if not await is_owner(event): return
+    txt = event.pattern_match.group(1)
+    welcome_config[event.chat_id] = {"enabled": True, "message": txt}
+    await quick_edit(event, "📩 تم تحديث رسالة الترحيب.")
+
+# ───── حفظ الوسائط المؤقتة من الخاص ─────
+@client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private and e.media))
+async def save_media(event):
+    name = os.path.join("downloads", f"{event.id}")
+    try:
+        path = await event.download_media(file=name)
+        print(f"📥 تم حفظ الوسائط: {path}")
+    except:
+        pass
+
+# ───── كشف معلومات المجموعة ─────
+@client.on(events.NewMessage(pattern=r"^\.كشف$"))
+async def group_info(event):
+    if not await is_owner(event): return
+    if not event.is_group:
+        return await quick_edit(event, "❌ هذا الأمر فقط للمجموعات.")
+    info = await event.get_chat()
+    msg = f"""
+🏷️ العنوان: {info.title}
+🆔 المعرف: {info.id}
+👥 الأعضاء: {getattr(info, 'participants_count', 'غير معروف')}
+📛 اسم المستخدم: @{getattr(info, 'username', 'لا يوجد')}
+"""
+    await quick_edit(event, msg.strip(), delay=10)
+
+# ───── أمر فحص ─────
+@client.on(events.NewMessage(pattern=r"^\.فحص$"))
+async def check_status(event):
+    if not await is_owner(event): return
+    await event.edit("⚡ جاري الفحص...")
+    await asyncio.sleep(2)
+    await event.edit("✅ البوت شغال تمام 💯")
+    await asyncio.sleep(10)
+    await event.delete()
+
+# ───── قائمة الأوامر ─────
+@client.on(events.NewMessage(pattern=r"^\.الاوامر$"))
+async def show_commands(event):
+    if not await is_owner(event): return
+    cmds = """
+🎛️ الأوامر:
+
+👤 الاسم:
+.اسم مؤقت | .ايقاف الاسم
+
+📢 القناة:
+.اسم قناة <رابط> | .ايقاف اسم قناة <رابط>
+
+🔇 الكتم:
+.كتم (رد) | .الغاء الكتم (رد)
+.قائمة الكتم | .مسح الكتم
+
+🌀 التقليد:
+.تقليد (رد) | .ايقاف التقليد
+
+🌸 الترحيب:
+.تفعيل الترحيب | .تعطيل الترحيب
+.وضع ترحيب <رسالة>
+
+🕵️ أخرى:
+.كشف | .فحص | .الاوامر
+"""
+    await quick_edit(event, cmds, delay=8)
+
+# ───── بدء التشغيل ─────
+print("✅ تم تشغيل البوت بنجاح - المطور: الصعب")
+client.start()
+client.run_until_disconnected()
