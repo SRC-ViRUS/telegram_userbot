@@ -25,9 +25,7 @@ last_imitated_message_id = None
 channel_name_tasks = {}
 change_name_task = None
 previous_name = None
-welcome_config = {}  # {chat_id: {"enabled": bool, "text": str}}
-
-# ───── لمنع تكرار تنفيذ نفس الأمر بنفس المستخدم ─────
+welcome_config = {}
 last_commands = {}
 
 def is_spamming(user_id, command, delay=1.5):
@@ -39,16 +37,13 @@ def is_spamming(user_id, command, delay=1.5):
     last_commands[key] = now
     return False
 
-# ───── توقيت بغداد ─────
 def now_baghdad(fmt="%I:%M"):
     return (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime(fmt)
 
-# ───── تحقق من المالك ─────
 async def is_owner(event):
     me = await client.get_me()
     return event.sender_id == me.id
 
-# ───── تنظيف الجلسة ─────
 async def cleanup():
     global change_name_task, channel_name_tasks, saved_media
     if change_name_task and not change_name_task.done():
@@ -74,7 +69,6 @@ async def cleanup():
         except:
             pass
 
-# ───── الاسم المؤقت للحساب ─────
 async def loop_name():
     global previous_name
     previous_name = (await client.get_me()).first_name
@@ -87,10 +81,8 @@ async def loop_name():
 
 @client.on(events.NewMessage(pattern=r"^\.اسم مؤقت$"))
 async def start_name(event):
-    if not await is_owner(event):
-        return
-    if is_spamming(event.sender_id, ".اسم مؤقت"):
-        return
+    if not await is_owner(event): return
+    if is_spamming(event.sender_id, ".اسم مؤقت"): return
     global change_name_task
     if change_name_task and not change_name_task.done():
         return await event.reply("✅ مفعل مسبقًا.")
@@ -99,10 +91,8 @@ async def start_name(event):
 
 @client.on(events.NewMessage(pattern=r"^\.ايقاف الاسم$"))
 async def stop_name(event):
-    if not await is_owner(event):
-        return
-    if is_spamming(event.sender_id, ".ايقاف الاسم"):
-        return
+    if not await is_owner(event): return
+    if is_spamming(event.sender_id, ".ايقاف الاسم"): return
     global change_name_task, previous_name
     if change_name_task:
         change_name_task.cancel()
@@ -114,13 +104,10 @@ async def stop_name(event):
             pass
     await event.reply("🛑 تم إيقاف الاسم المؤقت.")
 
-# ───── اسم قناة مؤقت ─────
 @client.on(events.NewMessage(pattern=r"^\.اسم قناة (.+)$"))
 async def start_channel_name(event):
-    if not await is_owner(event):
-        return
-    if is_spamming(event.sender_id, ".اسم قناة"):
-        return
+    if not await is_owner(event): return
+    if is_spamming(event.sender_id, ".اسم قناة"): return
     link = event.pattern_match.group(1).strip()
     try:
         chat = await client.get_entity(link)
@@ -150,10 +137,8 @@ async def start_channel_name(event):
 
 @client.on(events.NewMessage(pattern=r"^\.ايقاف اسم قناة (.+)$"))
 async def stop_channel_name(event):
-    if not await is_owner(event):
-        return
-    if is_spamming(event.sender_id, ".ايقاف اسم قناة"):
-        return
+    if not await is_owner(event): return
+    if is_spamming(event.sender_id, ".ايقاف اسم قناة"): return
     link = event.pattern_match.group(1).strip()
     try:
         chat = await client.get_entity(link)
@@ -174,30 +159,24 @@ async def stop_channel_name(event):
 # ───── كتم / فك كتم ─────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def mute(event):
-    if not await is_owner(event):
-        return
-    if is_spamming(event.sender_id, ".كتم"):
-        return
+    if not await is_owner(event): return
+    if is_spamming(event.sender_id, ".كتم"): return
     r = await event.get_reply_message()
     (muted_private if event.is_private else muted_groups.setdefault(event.chat_id, set())).add(r.sender_id)
     await event.reply("🔇 تم كتمه.")
 
 @client.on(events.NewMessage(pattern=r"^\.الغاء الكتم$", func=lambda e: e.is_reply))
 async def unmute(event):
-    if not await is_owner(event):
-        return
-    if is_spamming(event.sender_id, ".الغاء الكتم"):
-        return
+    if not await is_owner(event): return
+    if is_spamming(event.sender_id, ".الغاء الكتم"): return
     r = await event.get_reply_message()
     (muted_private if event.is_private else muted_groups.get(event.chat_id, set())).discard(r.sender_id)
     await event.reply("🔊 تم فك الكتم.")
 
 @client.on(events.NewMessage(pattern=r"^\.قائمة الكتم$"))
 async def mute_list(event):
-    if not await is_owner(event):
-        return
-    if is_spamming(event.sender_id, ".قائمة الكتم"):
-        return
+    if not await is_owner(event): return
+    if is_spamming(event.sender_id, ".قائمة الكتم"): return
     txt = "📋 المكتومون:\n"
     for u in muted_private:
         txt += f"• خاص: {u}\n"
@@ -207,10 +186,8 @@ async def mute_list(event):
 
 @client.on(events.NewMessage(pattern=r"^\.مسح الكتم$"))
 async def mute_clear(event):
-    if not await is_owner(event):
-        return
-    if is_spamming(event.sender_id, ".مسح الكتم"):
-        return
+    if not await is_owner(event): return
+    if is_spamming(event.sender_id, ".مسح الكتم"): return
     muted_private.clear()
     muted_groups.clear()
     await event.reply("🗑️ تم المسح.")
@@ -218,12 +195,39 @@ async def mute_clear(event):
 # ───── تقليد ─────
 @client.on(events.NewMessage(pattern=r"^\.تقليد$", func=lambda e: e.is_reply))
 async def imitate(event):
-    if not await is_owner(event):
-        return
-    if is_spamming(event.sender_id, ".تقليد"):
-        return
+    if not await is_owner(event): return
+    if is_spamming(event.sender_id, ".تقليد"): return
     global imitate_user_id, last_imitated_message_id
     r = await event.get_reply_message()
     imitate_user_id = r.sender_id
     last_imitated_message_id = None
-    msg = await event.edit("
+    await event.edit("✅ تم تفعيل التقليد.")
+
+@client.on(events.NewMessage(pattern=r"^\.ايقاف التقليد$"))
+async def stop_imitate(event):
+    if not await is_owner(event): return
+    global imitate_user_id, last_imitated_message_id
+    imitate_user_id = None
+    last_imitated_message_id = None
+    await event.edit("🛑 تم إيقاف التقليد.")
+
+@client.on(events.NewMessage(incoming=True))
+async def do_imitate(event):
+    global imitate_user_id, last_imitated_message_id
+    if imitate_user_id is None:
+        return
+    if event.sender_id != imitate_user_id:
+        return
+    if event.id == last_imitated_message_id:
+        return
+    if event.message and not event.out and not event.via_bot_id:
+        try:
+            await event.reply(event.raw_text)
+            last_imitated_message_id = event.id
+        except:
+            pass
+
+# ───── تشغيل البوت ─────
+print("✅ تم تشغيل البوت بنجاح.")
+client.start()
+client.run_until_disconnected()
