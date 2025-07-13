@@ -1,223 +1,207 @@
 # -*- coding: utf-8 -*-
-import asyncio, os, datetime
+import asyncio
+import datetime
+import os
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.functions.account import UpdateProfileRequest
 from telethon.tl.functions.channels import EditTitleRequest
-from telethon.errors import ChatAdminRequiredError
+from telethon.tl.functions.messages import GetFullChatRequest
+from telethon.tl.functions.channels import GetFullChannelRequest
 
-# ---------- بيانات الاتصال ----------
-api_id = 11765349
-api_hash = '67d3351652cc42239a42df8c17186d49'
-session_string = "1ApWapzMBu3cFPR8Mg8e7L_ziTRYf1asEKqvG9LnTCpxCI1tfhIienyV1R6ZsoqRagi05md2RxyIy0RA_ACKFr6qAryc-n66NEW7XihIhFXBBnmlMQ8gC1fSB_14X5DAMgjyte6SY-ssJ7xxVx-A6-eSvosDAJtVZcy0vePv_KCPEp6utel3zg-LzZOHayExqYg4TMAbnLtbna1opvcomXpYTZDaUsw5aHJ5EKBwYoz3EBRYnKQY4L_NC03tef7gGW0eqejpkUPd6_qDH9ivhKl7CBLY7c3F4VYtcOgW6f8GJow_XBi-NUIZAF-BftOTO2h_Tx83UavLtpNjWYwaSjwugBiXo-OY="
+# بيانات البوت
+api_id = 123456   # <-- غيّر إلى الخاص بك
+api_hash = "your_api_hash"
+session_string = "your_session_string"
 
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
-os.makedirs("downloads", exist_ok=True)
 
-# ---------- متغيّرات ----------
-muted_private, muted_groups = set(), {}
-imitate_user = None            # الشخص المقلَّد
-change_name_task = None        # مهمة تغيير الاسم الشخصي
-channel_name_tasks = {}        # {cid:{task,prev}}
-saved_media = {}               # {name:path}
+muted_users = set()
+imitate_users = set()
+channel_title_tasks = {}
+change_name_task = None
 previous_name = None
 
-# ---------- مساعدات ----------
-async def is_owner(event):
-    return event.sender_id == (await client.get_me()).id
+saved_media = {}
 
-# ---------- تغيير الاسم الشخصي كل 60 ثانية ----------
+# التحقق من المالك فقط
+async def is_owner(event):
+    me = await client.get_me()
+    return event.sender_id == me.id
+
+# تغيير الاسم الشخصي كل دقيقة بتوقيت بغداد
 async def name_loop():
     global previous_name
     me = await client.get_me()
     previous_name = me.first_name
     while True:
-        t = datetime.datetime.utcnow().strftime("%I:%M")
+        t = (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime("%I:%M")
         try:
             await client(UpdateProfileRequest(first_name=t))
         except: pass
         await asyncio.sleep(60)
 
 @client.on(events.NewMessage(pattern=r"^\.اسم مؤقت$"))
-async def name_temp_on(event):
-    if not await is_owner(event): return
+async def start_temp_name(event):
     global change_name_task
-    if change_name_task and not change_name_task.done():
-        return await event.reply("🔄 مفعل مسبقًا.")
+    if not await is_owner(event): return
+    if change_name_task: return await event.reply("مفعل مسبقاً")
     change_name_task = asyncio.create_task(name_loop())
-    await event.reply("✅ تغيير الاسم الشخصي كل 60 ثانية.")
+    await event.reply("✅ تم تفعيل تغيير الاسم كل دقيقة")
 
 @client.on(events.NewMessage(pattern=r"^\.ايقاف الاسم$"))
-async def name_temp_off(event):
-    if not await is_owner(event): return
+async def stop_temp_name(event):
     global change_name_task, previous_name
-    if change_name_task: change_name_task.cancel()
-    change_name_task = None
-    if previous_name:
-        try: await client(UpdateProfileRequest(first_name=previous_name))
+    if not await is_owner(event): return
+    if change_name_task:
+        change_name_task.cancel()
+        change_name_task = None
+        try:
+            if previous_name:
+                await client(UpdateProfileRequest(first_name=previous_name))
         except: pass
-    await event.reply("🛑 تم الإيقاف.")
+    await event.reply("🛑 تم إيقاف الاسم المؤقت")
 
-# ---------- تغيير اسم القناة كل 60 ثانية ----------
+# تغيير اسم القناة كل دقيقة
 @client.on(events.NewMessage(pattern=r"^\.اسم قناة (.+)$"))
-async def chan_name_on(event):
+async def start_channel_name(event):
     if not await is_owner(event): return
     link = event.pattern_match.group(1).strip()
-    try: chat = await client.get_entity(link)
-    except: return await event.reply("❌ رابط غير صالح.")
+    try:
+        chat = await client.get_entity(link)
+    except:
+        return await event.reply("❌ فشل في الوصول للقناة")
     cid = chat.id
-    if cid in channel_name_tasks:
-        return await event.reply("🔄 مفعل مسبقًا.")
-    prev = getattr(chat, "title", None)
-    async def loop():
+    if cid in channel_title_tasks:
+        return await event.reply("🔄 مفعّل مسبقاً")
+    old_title = chat.title
+    async def update_title():
         try:
             while True:
-                title = datetime.datetime.utcnow().strftime("%I:%M")
-                try:
-                    await client(EditTitleRequest(chat, title))
-                    # حذف رسالة النظام (بدون نص)
-                    m = await client.get_messages(chat, 1)
-                    if m and not m[0].message: await m[0].delete()
-                except ChatAdminRequiredError:
-                    await client.send_message(event.chat_id, "🚫 لا صلاحية لتغيير الاسم."); break
+                title = (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime("%I:%M")
+                await client(EditTitleRequest(chat, title))
                 await asyncio.sleep(60)
-        finally:
-            if prev:
-                try: await client(EditTitleRequest(chat, prev))
-                except: pass
-    task = asyncio.create_task(loop())
-    channel_name_tasks[cid] = {"task": task, "prev": prev}
-    await event.reply("✅ بدأ التحديث.")
+        except: pass
+    task = asyncio.create_task(update_title())
+    channel_title_tasks[cid] = (task, old_title)
+    await event.reply("✅ تم تفعيل تغيير اسم القناة")
 
 @client.on(events.NewMessage(pattern=r"^\.ايقاف اسم قناة (.+)$"))
-async def chan_name_off(event):
+async def stop_channel_name(event):
     if not await is_owner(event): return
     link = event.pattern_match.group(1).strip()
-    try: chat = await client.get_entity(link)
-    except: return await event.reply("❌ رابط غير صالح.")
-    data = channel_name_tasks.pop(chat.id, None)
-    if not data: return await event.reply("❌ غير مفعّل.")
-    data["task"].cancel()
-    if data["prev"]:
-        try: await client(EditTitleRequest(chat, data["prev"]))
+    try:
+        chat = await client.get_entity(link)
+    except:
+        return await event.reply("❌ فشل في الوصول")
+    cid = chat.id
+    if cid in channel_title_tasks:
+        task, old = channel_title_tasks.pop(cid)
+        task.cancel()
+        try:
+            await client(EditTitleRequest(chat, old))
         except: pass
-    await event.reply("🛑 تم الإيقاف.")
+        await event.reply("🛑 تم الإيقاف")
+    else:
+        await event.reply("❌ لا يوجد تحديث مفعّل")
 
-# ---------- تقليد شخص واحد ----------
-@client.on(events.NewMessage(pattern=r"^\.تقليد$", func=lambda e: e.is_reply))
-async def imitate_set(event):
-    global imitate_user
-    if not await is_owner(event): return
-    imitate_user = (await event.get_reply_message()).sender_id
-    await event.reply("✅ سيتم تقليد هذا المستخدم.")
-
-@client.on(events.NewMessage(pattern=r"^\.لاتقلده$"))
-async def imitate_clear(event):
-    global imitate_user
-    if not await is_owner(event): return
-    imitate_user = None
-    await event.reply("🛑 تم إلغاء التقليد.")
-
-@client.on(events.NewMessage(incoming=True))
-async def imitate_run(event):
-    if imitate_user and event.sender_id == imitate_user:
-        if event.media:
-            f = await event.download_media("downloads/")
-            await client.send_file(event.chat_id, f, caption=event.text or "")
-            if os.path.exists(f): os.remove(f)
-        elif event.text:
-            await event.respond(event.text)
-
-# ---------- كتم / فك كتم ----------
+# كتم و فك كتم
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def mute(event):
     if not await is_owner(event): return
-    r = await event.get_reply_message()
-    (muted_private if event.is_private else muted_groups.setdefault(event.chat_id,set())).add(r.sender_id)
-    await event.delete()
+    reply = await event.get_reply_message()
+    muted_users.add(reply.sender_id)
+    await event.reply("تم كتم الشخص")
 
 @client.on(events.NewMessage(pattern=r"^\.الغاء الكتم$", func=lambda e: e.is_reply))
 async def unmute(event):
     if not await is_owner(event): return
-    r = await event.get_reply_message()
-    (muted_private if event.is_private else muted_groups.get(event.chat_id,set())).discard(r.sender_id)
-    await event.delete()
+    reply = await event.get_reply_message()
+    muted_users.discard(reply.sender_id)
+    await event.reply("تم فك الكتم")
 
-# ---------- حذف رسائل المكتومين ----------
+@client.on(events.NewMessage(pattern=r"^\.قائمة الكتم$"))
+async def mute_list(event):
+    if not await is_owner(event): return
+    if not muted_users:
+        return await event.reply("لا يوجد مكتومين")
+    text = "📋 قائمة المكتومين:\n"
+    for user_id in muted_users:
+        try:
+            user = await client.get_entity(user_id)
+            text += f"• {user.first_name}\n"
+        except: continue
+    await event.reply(text)
+
+@client.on(events.NewMessage(pattern=r"^\.مسح الكتم$"))
+async def clear_mute(event):
+    if not await is_owner(event): return
+    muted_users.clear()
+    await event.reply("✅ تم مسح القائمة")
+
+# تقليد شخص معين فقط
+@client.on(events.NewMessage(pattern=r"^\.قلده$", func=lambda e: e.is_reply))
+async def imitate_user(event):
+    if not await is_owner(event): return
+    reply = await event.get_reply_message()
+    imitate_users.add(reply.sender_id)
+    await event.reply("✅ سيبدأ تقليد هذا الشخص فقط")
+
+@client.on(events.NewMessage(pattern=r"^\.لاتقلده$", func=lambda e: e.is_reply))
+async def stop_imitate_user(event):
+    if not await is_owner(event): return
+    reply = await event.get_reply_message()
+    imitate_users.discard(reply.sender_id)
+    await event.reply("🛑 تم إيقاف تقليده")
+
+# تقليد رسائل الشخص المضاف فقط
 @client.on(events.NewMessage(incoming=True))
-async def del_muted(event):
-    if (event.is_private and event.sender_id in muted_private) or \
-       (event.chat_id in muted_groups and event.sender_id in muted_groups[event.chat_id]):
-        return await event.delete()
+async def imitate_incoming(event):
+    if event.sender_id in imitate_users:
+        if event.media:
+            file = await event.download_media("temp/")
+            await client.send_file(event.chat_id, file, caption=event.text or "")
+            os.remove(file)
+        elif event.text:
+            await event.respond(event.text)
 
-# ---------- حفظ / إرسال / حذف بصمات ----------
+    if event.sender_id in muted_users:
+        await event.delete()
+
+# حفظ بصمة
 @client.on(events.NewMessage(pattern=r"^\.احفظ (.+)$", func=lambda e: e.is_reply))
-async def save_media(event):
+async def save(event):
     if not await is_owner(event): return
     name = event.pattern_match.group(1).strip()
-    r = await event.get_reply_message()
-    if not r.media: return await event.reply("❌ لا توجد وسائط.")
-    path = await r.download_media(f"downloads/{name}")
-    saved_media[name] = path
-    await event.reply("✅ تم الحفظ.")
+    reply = await event.get_reply_message()
+    if reply.media:
+        path = await reply.download_media(f"downloads/{name}")
+        saved_media[name] = path
+        await event.reply(f"✅ تم الحفظ باسم: {name}")
+    else:
+        await event.reply("❌ لا يوجد وسائط")
 
-@client.on(events.NewMessage(pattern=r"^\.حذف (.+)$"))
-async def del_media(event):
+# إرسال بصمة محفوظة
+@client.on(events.NewMessage())
+async def send_saved(event):
     if not await is_owner(event): return
-    name = event.pattern_match.group(1).strip()
-    p = saved_media.pop(name, None)
-    if p and os.path.exists(p): os.remove(p); await event.reply("🗑️ تم الحذف.")
-    else: await event.reply("❌ غير موجود.")
+    name = event.raw_text.strip()
+    path = saved_media.get(name)
+    if path and os.path.exists(path):
+        await client.send_file(event.chat_id, path)
+        await event.delete()
 
-@client.on(events.NewMessage(pattern=r"^\.قائمة البصمات$"))
-async def list_media(event):
+# أمر الوقت حسب بغداد
+@client.on(events.NewMessage(pattern=r"^\.الوقت$"))
+async def time_now(event):
     if not await is_owner(event): return
-    if not saved_media: return await event.reply("⚠️ لا توجد بصمات.")
-    await event.reply("📋 البصمات:\n"+"\n".join(f"• {n}" for n in saved_media))
+    now = (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime("%I:%M %p")
+    await event.reply(f"🕒 الوقت الآن في بغداد:\n`{now}`")
 
-@client.on(events.NewMessage(pattern=r"^\.(\w+)$"))
-async def send_media(event):
-    if not await is_owner(event): return
-    name = event.pattern_match.group(1)
-    p = saved_media.get(name)
-    if p and os.path.exists(p):
-        await client.send_file(event.chat_id, p); await event.delete()
-
-# ---------- فحص ----------
-@client.on(events.NewMessage(pattern=r"^\.فحص$"))
-async def ping(event):
-    if not await is_owner(event): return
-    start = datetime.datetime.now()
-    msg = await event.edit("⌛")
-    end = datetime.datetime.now()
-    await msg.edit(f"✅ { (end-start).microseconds//1000 }ms")
-    await asyncio.sleep(3)
-    await msg.delete()
-
-# ---------- قائمة الأوامر ----------
-@client.on(events.NewMessage(pattern=r"^\.اوامر$"))
-async def cmds(event):
-    if not await is_owner(event): return
-    await event.respond("""
-📜 أوامر البوت:
-.اسم مؤقت             – تفعيل تغيير الاسم كل دقيقة
-.ايقاف الاسم           – إيقاف تغيير الاسم
-.اسم قناة <رابط>       – تفعيل تغيير اسم القناة كل دقيقة
-.ايقاف اسم قناة <رابط> – إيقاف تغيير اسم القناة
-.تقليد (بالرد)         – تقليد شخص واحد
-.لاتقلده               – إلغاء التقليد
-.كتم / .الغاء الكتم (رد) – كتم/فك كتم عضو
-.احفظ <اسم> (رد على وسائط) – حفظ وسائط
-.<اسم>                 – إرسال الوسائط المحفوظة
-.حذف <اسم>            – حذف بصمة
-.قائمة البصمات         – عرض البصمات
-""")
-    await event.delete()
-
-# ---------- تشغيل البوت ----------
+# تشغيل البوت
 async def main():
     await client.start()
-    print("✅ Bot is running.")
+    print("✅ البوت يعمل")
     await client.run_until_disconnected()
 
 if __name__ == "__main__":
