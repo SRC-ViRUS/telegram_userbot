@@ -7,9 +7,9 @@ from telethon.tl.functions.channels import EditTitleRequest
 from telethon.errors import ChatAdminRequiredError
 
 # ───── بيانات الاتصال ─────
-api_id = 20507759  # ← استبدله بـ API_ID
-api_hash = "225d3a24d84c637b3b816d13cc7bd766"  # ← استبدله بـ API_HASH
-session_string = "1ApWapzMBu6vOgZU6ORszv7oDvb1YG3qw4PPoXdP1vaUkL6RH7lWG3Rj3Vt3-ai2kyID0DGo-ZZVtB-fMlRd-nD-AO2-w1Q9qqO3qqp1TzJ21CvwJwL6yo2yavX2BHPHEBiWrEDiHqO01g1zY4t_Kf7dA-01qZqBCzRmDir6htC1VmFkY-GUXUQSqRgskQu3mz42hC-GHQmp-6sc-GRDgOQj_p5CcziJQNUg8wxoMdQlr8tAGBySMM_EPkUXSgKVts4iphZ3jVf_bLnBoj2DiugSN9VKJUhEA7R0cOvlpuC88huj4mUypaJ5OnO-aEghyN5--kFl3hrVVBtmLnGOBuRRloAKxZsY="  # ← استبدله بـ StringSession
+api_id = 20507759
+api_hash = "225d3a24d84c637b3b816d13cc7bd766"
+session_string = "1ApWapzMBu6vOgZU6ORszv7oDvb1YG3qw4PPoXdP1vaUkL6RH7lWG3Rj3Vt3-ai2kyID0DGo-ZZVtB-fMlRd-nD-AO2-w1Q9qqO3qqp1TzJ21CvwJwL6yo2yavX2BHPHEBiWrEDiHqO01g1zY4t_Kf7dA-01qZqBCzRmDir6htC1VmFkY-GUXUQSqRgskQu3mz42hC-GHQmp-6sc-GRDgOQj_p5CcziJQNUg8wxoMdQlr8tAGBySMM_EPkUXSgKVts4iphZ3jVf_bLnBoj2DiugSN9VKJUhEA7R0cOvlpuC88huj4mUypaJ5OnO-aEghyN5--kFl3hrVVBtmLnGOBuRRloAKxZsY="
 
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 os.makedirs("downloads", exist_ok=True)
@@ -179,7 +179,6 @@ async def imitate_user(event):
             os.remove(path)
         else:
             await event.respond(event.text)
-    # حذف المكتوم
     if (event.is_private and event.sender_id in muted_private) or \
        (event.chat_id in muted_groups and event.sender_id in muted_groups[event.chat_id]):
         await event.delete()
@@ -241,13 +240,12 @@ async def commands(event):
                       ".تقليد (بالرد) / .لاتقلده\n"
                       ".احفظ <اسم> / .<اسم> / .حذف <اسم>\n"
                       ".قائمة البصمات")
-@client.on(events.NewMessage(incoming=True))
-async def auto_save_media(event):
-    try:
+
+# ───── حفظ الوسائط من الخاص فقط ─────
 @client.on(events.NewMessage(incoming=True))
 async def auto_save_media(event):
     if not event.is_private:
-        return  # تجاهل غير الخاص
+        return
 
     try:
         if event.media and getattr(event.media, 'ttl_seconds', None):
@@ -267,6 +265,7 @@ async def auto_save_media(event):
 
     except Exception as e:
         print(f"[❌] خطأ أثناء حفظ الوسائط: {e}")
+
 # ───── تشغيل البوت ─────
 async def main():
     await client.start()
