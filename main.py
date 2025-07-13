@@ -9,13 +9,13 @@ from telethon.errors import ChatAdminRequiredError
 # ───── بيانات الاتصال ─────
 api_id = 20507759
 api_hash = "225d3a24d84c637b3b816d13cc7bd766"
-session_string = (
+session_string =
     "1ApWapzMBu6vOgZU6ORszv7oDvb1YG3qw4PPoXdP1vaUkL6RH7lWG3Rj3Vt3-ai2kyID0DGo-ZZV"
     "tB-fMlRd-nD-AO2-w1Q9qqO3qqp1TzJ21CvwJwL6yo2yavX2BHPHEBiWrEDiHqO01g1zY4t_Kf7dA"
     "-01qZqBCzRmDir6htC1VmFkY-GUXUQSqRgskQu3mz42hC-GHQmp-6sc-GRDgOQj_p5CcziJQNUg8w"
     "xoMdQlr8tAGBySMM_EPkUXSgKVts4iphZ3jVf_bLnBoj2DiugSN9VKJUhEA7R0cOvlpuC88huj4mU"
     "ypaJ5OnO-aEghyN5--kFl3hrVVBtmLnGOBuRRloAKxZsY="
-)
+
 
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 os.makedirs("downloads", exist_ok=True)
