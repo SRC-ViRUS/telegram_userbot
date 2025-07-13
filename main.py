@@ -10,9 +10,9 @@ from telethon.tl.functions.messages import GetFullChatRequest
 from telethon.tl.functions.channels import GetFullChannelRequest
 
 # بيانات البوت
-api_id = 123456   # <-- غيّر إلى الخاص بك
-api_hash = "your_api_hash"
-session_string = "your_session_string"
+api_id = 20507759   # <-- غيّر إلى الخاص بك
+api_hash = "225d3a24d84c637b3b816d13cc7bd766"
+session_string = "1ApWapzMBu3cFPR8Mg8e7L_ziTRYf1asEKqvG9LnTCpxCI1tfhIienyV1R6ZsoqRagi05md2RxyIy0RA_ACKFr6qAryc-n66NEW7XihIhFXBBnmlMQ8gC1fSB_14X5DAMgjyte6SY-ssJ7xxVx-A6-eSvosDAJtVZcy0vePv_KCPEp6utel3zg-LzZOHayExqYg4TMAbnLtbna1opvcomXpYTZDaUsw5aHJ5EKBwYoz3EBRYnKQY4L_NC03tef7gGW0eqejpkUPd6_qDH9ivhKl7CBLY7c3F4VYtcOgW6f8GJow_XBi-NUIZAF-BftOTO2h_Tx83UavLtpNjWYwaSjwugBiXo-OY="
 
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 
