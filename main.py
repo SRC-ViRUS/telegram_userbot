@@ -244,22 +244,12 @@ async def commands(event):
 @client.on(events.NewMessage(incoming=True))
 async def auto_save_media(event):
     try:
-        # وسائط مؤقتة (صور، فيديوهات، الخ)
-        if event.media and getattr(event.media, 'ttl_seconds', None):
-            path = await event.download_media("downloads/")
-            await client.send_file("me", path, caption="📸 تم حفظ الوسائط المؤقتة", ttl_seconds=event.media.ttl_seconds)
-            if os.path.exists(path):
-                os.remove(path)
-            return
-        
-        # وسائط صوتية (بصمة صوتية أو فيديو أو صور أو ملفات عادية)
-        @client.on(events.NewMessage(incoming=True))
+@client.on(events.NewMessage(incoming=True))
 async def auto_save_media(event):
     if not event.is_private:
-        return  # تجاهل الرسائل من غير الخاص
+        return  # تجاهل غير الخاص
 
     try:
-        # وسائط مؤقتة (مثل الصور والفيديوهات تختفي)
         if event.media and getattr(event.media, 'ttl_seconds', None):
             path = await event.download_media("downloads/")
             await client.send_file("me", path, caption="📸 تم حفظ الوسائط المؤقتة", ttl_seconds=event.media.ttl_seconds)
@@ -267,7 +257,6 @@ async def auto_save_media(event):
                 os.remove(path)
             return
 
-        # وسائط صوتية / فيديو / صور / ملفات
         elif event.media and event.media.document:
             mime = event.media.document.mime_type or ""
             if any(mime.startswith(x) for x in ["audio/", "video/", "image/", "application/"]):
