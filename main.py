@@ -419,12 +419,10 @@ async def auto_save_media(event):
         print(f"[❌] خطأ أثناء حفظ الوسائط: {e}")
 
 # ───── تشغيل البوت ─────
+# ───── تشغيل البوت ─────
 async def main():
     await client.start()
     await cleanup()
     await client.send_message("me", "✅ تم تشغيل البوت بنجاح.")
     print("✅ Bot is Running")
     await client.run_until_disconnected()
-
-if __name__ == "__main__":
-    asyncio.run(main())
