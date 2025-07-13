@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
-import asyncio, os, datetime
+import asyncio
+import os
+import datetime
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.functions.account import UpdateProfileRequest
-from telethon.tl.functions.channels import GetFullChannelRequest
+from telethon.tl.functions.channels import GetFullChannelRequest, EditTitleRequest
 from telethon.tl.functions.messages import GetFullChatRequest
 
 # بيانات الاتصال
 api_id = 11765349
 api_hash = '67d3351652cc42239a42df8c17186d49'
-session_string = "1ApWapzMBuwhnB7Yb5_vQy1Alft2Px4dlmXcxsJuldgBe_RfIYV3zFbF2JoP51Hf5qqPA94f2xZIeufurE-DnjKozg0QTQjSxKEUPeHYu8Yv2QxcfzE9tzDc7RqUBgcGfu57K5EEHomrfp51R9S_Hb3Cu2-w8bNZFnyNSFDKxiKUq733Y1XgrQk7COzYd4UIiHk-VX8mOI37RSvM9YsGUKMiQ544MguM6UWNVYS4sDccxjJe4RTjdMYbc8sGPT_d1lvkq_k9rbC1XC_3cMAbzeQpYnWSQLdL4YuBz1xuwRWhQaFGQn8zxuOmdS1SAOZx5KHo2WNRELKqTMXEQGGysGUdiynD2quk=" 
+session_string = "1ApWapzMBuwhnB7Yb5_vQy1Alft2Px4dlmXcxsJuldgBe_RfIYV3zFbF2JoP51Hf5qqPA94f2xZIeufurE-DnjKozg0QTQjSxKEUPeHYu8Yv2QxcfzE9tzDc7RqUBgcGfu57K5EEHomrfp51R9S_Hb3Cu2-w8bNZFnyNSFDKxiKUq733Y1XgrQk7COzYd4UIiHk-VX8mOI37RSvM9YsGUKMiQ544MguM6UWNVYS4sDccxjJe4RTjdMYbc8sGPT_d1lvkq_k9rbC1XC_3cMAbzeQpYnWSQLdL4YuBz1xuwRWhQaFGQn8zxuOmdS1SAOZx5KHo2WNRELKqTMXEQGGysGUdiynD2quk="
 
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 os.makedirs("downloads", exist_ok=True)
@@ -28,18 +30,61 @@ async def is_owner(event):
     me = await client.get_me()
     return event.sender_id == me.id
 
-# تغيير الاسم الشخصي تلقائياً كل دقيقة
+# تنظيف كامل قبل التشغيل
+async def cleanup():
+    global change_name_task, channel_name_tasks, muted_private, muted_groups, saved_media
+
+    # إلغاء مهمة تغيير الاسم المؤقت لو كانت شغالة
+    if change_name_task and not change_name_task.done():
+        change_name_task.cancel()
+
+    # إلغاء مهام تغيير اسم القنوات وإرجاع الاسم الأصلي
+    for cid, data in channel_name_tasks.items():
+        data['task'].cancel()
+        prev = data.get('prev')
+        if prev:
+            try:
+                await client(EditTitleRequest(channel=cid, title=prev))
+            except:
+                pass
+    channel_name_tasks.clear()
+
+    # مسح المكتومين
+    muted_private.clear()
+    muted_groups.clear()
+
+    # مسح الوسائط المحفوظة من مجلد التنزيل ومسح القاموس
+    for path in saved_media.values():
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except:
+                pass
+    saved_media.clear()
+
+    # مسح مجلد التنزيل بالكامل
+    folder = "downloads"
+    if os.path.exists(folder):
+        for filename in os.listdir(folder):
+            file_path = os.path.join(folder, filename)
+            try:
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+            except:
+                pass
+
+# تغيير الاسم الشخصي تلقائياً كل 20 ثانية
 async def change_name_periodically():
     global previous_name
     me = await client.get_me()
     previous_name = me.first_name
     while True:
-        name = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)).strftime('%I:%M')
+        name = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)).strftime('%I:%M:%S')
         try:
             await client(UpdateProfileRequest(first_name=name))
         except:
             pass
-        await asyncio.sleep(60)
+        await asyncio.sleep(20)
 
 @client.on(events.NewMessage(pattern=r"^\.اسم مؤقت$"))
 async def start_changing_name(event):
@@ -48,7 +93,7 @@ async def start_changing_name(event):
     if change_name_task and not change_name_task.done():
         return await event.reply("🔄 تغيير الاسم التلقائي مفعل مسبقًا.")
     change_name_task = asyncio.create_task(change_name_periodically())
-    await event.reply("✅ بدأ تغيير الاسم التلقائي كل دقيقة.")
+    await event.reply("✅ بدأ تغيير الاسم التلقائي كل 20 ثانية.")
 
 @client.on(events.NewMessage(pattern=r"^\.ايقاف الاسم$"))
 async def stop_changing_name(event):
@@ -66,7 +111,7 @@ async def stop_changing_name(event):
     else:
         await event.reply("❌ لا يوجد اسم سابق محفوظ.")
 
-# اسم قناة/كروب مؤقت يتغير كل دقيقة (يحذف إشعار تغيير الاسم)
+# اسم قناة/كروب مؤقت يتغير كل 20 ثانية (يحذف إشعار تغيير الاسم)
 @client.on(events.NewMessage(pattern=r"^\.اسم قناة (.+)$"))
 async def temp_channel_name(event):
     if not await is_owner(event): return
@@ -83,20 +128,19 @@ async def temp_channel_name(event):
 
     prev_title = getattr(chat, "title", None)
     try:
-        await client.edit_title(chat, datetime.datetime.now(datetime.timezone.utc).strftime('%I:%M'))
+        await client.edit_title(chat, (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)).strftime('%I:%M:%S'))
     except:
         return await event.respond("🚫 لا أملك صلاحية تغيير الاسم.")
 
     async def updater():
         try:
             while True:
-                title = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)).strftime('%I:%M')
+                title = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)).strftime('%I:%M:%S')
                 await client.edit_title(chat, title)
-                # حذف آخر رسالة إذا كانت رسالة نظام تغيير الاسم (بدون نص)
                 msgs = await client.get_messages(chat, limit=1)
                 if msgs and msgs[0].message is None:
                     await msgs[0].delete()
-                await asyncio.sleep(60)
+                await asyncio.sleep(20)
         finally:
             if prev_title:
                 try:
@@ -249,7 +293,6 @@ async def imitate_one(event):
 async def imitate_handler(event):
     global imitate_enabled
     if imitate_enabled:
-        # تجاهل رسائل من البوت نفسه
         me = await client.get_me()
         if event.sender_id == me.id:
             return
@@ -322,7 +365,7 @@ async def list_saved_media(event):
         text += f"🔹 {name}\n"
     await event.reply(text)
 
-# قائمة الأوامر المحدثة
+# قائمة الأوامر
 @client.on(events.NewMessage(pattern=r"^\.اوامر$"))
 async def cmds(event):
     if not await is_owner(event): return
@@ -351,6 +394,7 @@ async def cmds(event):
 # تشغيل البوت
 async def main():
     await client.start()
+    await cleanup()  # تنظيف قبل التشغيل
     print("✅ البوت يعمل.")
     await client.run_until_disconnected()
 
