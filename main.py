@@ -40,8 +40,6 @@ previous_name = None
 last_commands = {}
 welcome_config = {}  # {chat_id: {"enabled": bool, "message": str}}
 
-me = None  # لحفظ معلومات المستخدم صاحب الجلسة
-
 # ───── دوال مساعدة ─────
 def is_spamming(user_id, command, delay=1.5):
     now = datetime.datetime.now().timestamp()
@@ -55,15 +53,12 @@ def now_baghdad(fmt="%I:%M %p"):
     return (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime(fmt)
 
 async def is_owner(event):
-    global me
-    if me is None:
-        me = await client.get_me()
+    me = await client.get_me()
     return event.sender_id == me.id
 
-async def quick_edit(event, text, delay=3):
+async def quick_edit(event, text, delay=1):
     await event.edit(text)
     await asyncio.sleep(delay)
-    # لحين التأكد من عمل الأوامر، علق السطر التالي
     await event.delete()
 
 # ───── الاسم المؤقت للحساب ─────
@@ -73,13 +68,12 @@ async def loop_name():
     while True:
         try:
             await client(UpdateProfileRequest(first_name=now_baghdad()))
-        except Exception as e:
-            print(f"خطأ بتحديث الاسم: {e}")
+        except:
+            pass
         await asyncio.sleep(60)
 
 @client.on(events.NewMessage(pattern=r"^\.اسم مؤقت$"))
 async def start_name(event):
-    print("تم استدعاء أمر .اسم مؤقت")
     if not await is_owner(event) or is_spamming(event.sender_id, ".اسم مؤقت"):
         return
     global change_name_task
@@ -90,7 +84,6 @@ async def start_name(event):
 
 @client.on(events.NewMessage(pattern=r"^\.ايقاف الاسم$"))
 async def stop_name(event):
-    print("تم استدعاء أمر .ايقاف الاسم")
     if not await is_owner(event) or is_spamming(event.sender_id, ".ايقاف الاسم"):
         return
     global change_name_task, previous_name
@@ -100,20 +93,19 @@ async def stop_name(event):
     if previous_name:
         try:
             await client(UpdateProfileRequest(first_name=previous_name))
-        except Exception as e:
-            print(f"خطأ بإرجاع الاسم السابق: {e}")
+        except:
+            pass
     await quick_edit(event, "🛑 تم إيقاف الاسم المؤقت.")
 
 # ───── الاسم المؤقت للقنوات ─────
 @client.on(events.NewMessage(pattern=r"^\.اسم قناة (.+)$"))
 async def start_channel_name(event):
-    print("تم استدعاء أمر .اسم قناة")
     if not await is_owner(event) or is_spamming(event.sender_id, ".اسم قناة"):
         return
     link = event.pattern_match.group(1).strip()
     try:
         channel = await client.get_entity(link)
-    except Exception:
+    except:
         return await quick_edit(event, "❌ رابط غير صالح.")
     if channel.id in channel_name_tasks:
         return await quick_edit(event, "🔄 الاسم المؤقت للقناة مفعّل مسبقًا.")
@@ -124,10 +116,9 @@ async def start_channel_name(event):
             try:
                 await client(EditTitleRequest(channel, now_baghdad()))
             except ChatAdminRequiredError:
-                print("لا توجد صلاحيات تعديل اسم القناة")
                 break
-            except Exception as e:
-                print(f"خطأ أثناء تعديل اسم القناة: {e}")
+            except:
+                pass
             await asyncio.sleep(60)
 
     task = asyncio.create_task(update_loop())
@@ -136,21 +127,20 @@ async def start_channel_name(event):
 
 @client.on(events.NewMessage(pattern=r"^\.ايقاف اسم قناة (.+)$"))
 async def stop_channel_name(event):
-    print("تم استدعاء أمر .ايقاف اسم قناة")
     if not await is_owner(event) or is_spamming(event.sender_id, ".ايقاف اسم قناة"):
         return
     link = event.pattern_match.group(1).strip()
     try:
         channel = await client.get_entity(link)
-    except Exception:
+    except:
         return await quick_edit(event, "❌ رابط غير صالح.")
     data = channel_name_tasks.pop(channel.id, None)
     if data:
         data["task"].cancel()
         try:
             await client(EditTitleRequest(data["entity"], data["prev"]))
-        except Exception as e:
-            print(f"خطأ بإرجاع اسم القناة السابق: {e}")
+        except:
+            pass
         await quick_edit(event, "🛑 تم إيقاف الاسم المؤقت للقناة.")
     else:
         await quick_edit(event, "❌ لا يوجد تعديل نشط لهذه القناة.")
@@ -158,7 +148,6 @@ async def stop_channel_name(event):
 # ───── كتم / فك كتم ─────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def mute(event):
-    print("تم استدعاء أمر .كتم")
     if not await is_owner(event): return
     r = await event.get_reply_message()
     (muted_private if event.is_private else muted_groups.setdefault(event.chat_id, set())).add(r.sender_id)
@@ -166,7 +155,6 @@ async def mute(event):
 
 @client.on(events.NewMessage(pattern=r"^\.الغاء الكتم$", func=lambda e: e.is_reply))
 async def unmute(event):
-    print("تم استدعاء أمر .الغاء الكتم")
     if not await is_owner(event): return
     r = await event.get_reply_message()
     (muted_private if event.is_private else muted_groups.get(event.chat_id, set())).discard(r.sender_id)
@@ -174,7 +162,6 @@ async def unmute(event):
 
 @client.on(events.NewMessage(pattern=r"^\.قائمة الكتم$"))
 async def mute_list(event):
-    print("تم استدعاء أمر .قائمة الكتم")
     if not await is_owner(event): return
     lines = []
     if muted_private:
@@ -188,7 +175,6 @@ async def mute_list(event):
 
 @client.on(events.NewMessage(pattern=r"^\.مسح الكتم$"))
 async def mute_clear(event):
-    print("تم استدعاء أمر .مسح الكتم")
     if not await is_owner(event): return
     muted_private.clear()
     muted_groups.clear()
@@ -197,14 +183,13 @@ async def mute_clear(event):
 @client.on(events.NewMessage(incoming=True))
 async def auto_delete_muted(event):
     if event.is_private and event.sender_id in muted_private:
-        await event.delete()
+        return await event.delete()
     if event.chat_id in muted_groups and event.sender_id in muted_groups[event.chat_id]:
-        await event.delete()
+        return await event.delete()
 
 # ───── التقليد الذكي (يدعم تقليد أكثر من شخص بكل الوسائط) ─────
 @client.on(events.NewMessage(pattern=r"^\.تقليد$", func=lambda e: e.is_reply))
 async def imitate(event):
-    print("تم استدعاء أمر .تقليد")
     if not await is_owner(event): return
     reply = await event.get_reply_message()
     imitate_user_ids.add(reply.sender_id)
@@ -212,7 +197,6 @@ async def imitate(event):
 
 @client.on(events.NewMessage(pattern=r"^\.ايقاف التقليد$"))
 async def stop_imitate(event):
-    print("تم استدعاء أمر .ايقاف التقليد")
     if not await is_owner(event): return
     imitate_user_ids.clear()
     await quick_edit(event, "🛑 تم إيقاف التقليد لجميع المستخدمين.")
@@ -226,12 +210,13 @@ async def imitate_user(event):
         return
     last_imitated_message_ids[event.sender_id] = event.id
     try:
+        # تقليد كامل مع دعم كل أنواع الوسائط والميديا (بما فيها المؤقتة)
         if event.media:
             await event.reply(file=event.media, message=event.raw_text or None)
         else:
             await event.reply(event.raw_text or "")
-    except Exception as e:
-        print(f"خطأ بالتقليد: {e}")
+    except Exception:
+        pass
 
 # ───── ترحيب تلقائي ─────
 @client.on(events.ChatAction)
@@ -247,21 +232,18 @@ async def welcome_new_user(event):
 
 @client.on(events.NewMessage(pattern=r"^\.تفعيل الترحيب$"))
 async def enable_welcome(event):
-    print("تم استدعاء أمر .تفعيل الترحيب")
     if not await is_owner(event): return
     welcome_config[event.chat_id] = {"enabled": True, "message": "اهلا {الاسم} 🌸"}
     await quick_edit(event, "✅ تم تفعيل الترحيب.")
 
 @client.on(events.NewMessage(pattern=r"^\.تعطيل الترحيب$"))
 async def disable_welcome(event):
-    print("تم استدعاء أمر .تعطيل الترحيب")
     if not await is_owner(event): return
     welcome_config[event.chat_id] = {"enabled": False}
     await quick_edit(event, "🛑 تم تعطيل الترحيب.")
 
 @client.on(events.NewMessage(pattern=r"^\.وضع ترحيب (.+)$"))
 async def set_welcome(event):
-    print("تم استدعاء أمر .وضع ترحيب")
     if not await is_owner(event): return
     txt = event.pattern_match.group(1)
     welcome_config[event.chat_id] = {"enabled": True, "message": txt}
@@ -280,7 +262,6 @@ async def save_media(event):
 # ───── كشف معلومات المجموعة ─────
 @client.on(events.NewMessage(pattern=r"^\.كشف$"))
 async def group_info(event):
-    print("تم استدعاء أمر .كشف")
     if not await is_owner(event): return
     if not event.is_group:
         return await quick_edit(event, "❌ هذا الأمر فقط للمجموعات.")
@@ -296,7 +277,6 @@ async def group_info(event):
 # ───── أمر فحص ─────
 @client.on(events.NewMessage(pattern=r"^\.فحص$"))
 async def check_status(event):
-    print("تم استدعاء أمر .فحص")
     if not await is_owner(event): return
     await event.edit("⚡ جاري الفحص...")
     await asyncio.sleep(2)
@@ -307,7 +287,6 @@ async def check_status(event):
 # ───── قائمة الأوامر (مطوّرة - خرافية وجذابة) ─────
 @client.on(events.NewMessage(pattern=r"^\.الاوامر$"))
 async def show_commands(event):
-    print("تم استدعاء أمر .الاوامر")
     if not await is_owner(event): return
     cmds = """
 ╔══════════════════════╗
@@ -319,4 +298,34 @@ async def show_commands(event):
   • .ايقاف الاسم    ➤ إيقاف تغيير الاسم المؤقت
 
 📢 𝗖𝗵𝗮𝗻𝗻𝗲𝗹 Commands:
-  • .اسم قناة <رابط>
+  • .اسم قناة <رابط>   ➤ تفعيل تغيير اسم القناة كل دقيقة
+  • .ايقاف اسم قناة <رابط> ➤ إيقاف تغيير اسم القناة
+
+🔇 𝗠𝘂𝘁𝗲 Commands:
+  • .كتم (رد)       ➤ كتم العضو المردود عليه
+  • .الغاء الكتم (رد) ➤ فك كتم العضو
+  • .قائمة الكتم     ➤ عرض قائمة المكتومين
+  • .مسح الكتم      ➤ مسح جميع المكتومين
+
+🌀 𝗜𝗺𝗶𝘁𝗮𝘁𝗲 Commands:
+  • .تقليد (رد)     ➤ تقليد أكثر من شخص بنفس الوقت بكل الوسائط
+  • .ايقاف التقليد   ➤ إيقاف التقليد فوراً
+
+🌸 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 Commands:
+  • .تفعيل الترحيب  ➤ تفعيل الترحيب التلقائي
+  • .تعطيل الترحيب  ➤ تعطيل الترحيب التلقائي
+  • .وضع ترحيب <رسالة> ➤ تعديل رسالة الترحيب
+
+🕵️ 𝗢𝘁𝗵𝗲𝗿 Commands:
+  • .كشف             ➤ كشف معلومات المجموعة
+  • .فحص             ➤ فحص حالة البوت
+  • .الاوامر          ➤ عرض قائمة الأوامر هذه
+
+═══════════════════════════
+"""
+    await quick_edit(event, cmds, delay=12)
+
+# ───── بدء التشغيل ─────
+print("✅ تم تشغيل البوت بنجاح - المطور: الصعب")
+client.start()
+client.run_until_disconnected()
