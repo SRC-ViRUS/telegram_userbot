@@ -193,7 +193,7 @@ async def mute_clear(event):
     muted_groups.clear()
     await event.reply("🗑️ تم المسح.")
 
-# ───── تقليد شخص فقط ─────
+# ───── تقليد شخص برد على رسالته ─────
 @client.on(events.NewMessage(pattern=r"^\.تقليد$", func=lambda e: e.is_reply))
 async def imitate(event):
     if not await is_owner(event):
@@ -214,13 +214,24 @@ async def stop_imitate(event):
 @client.on(events.NewMessage(incoming=True))
 async def imitate_user(event):
     if imitate_user_id and event.sender_id == imitate_user_id:
-        if event.media:
-            path = await event.download_media()
-            await client.send_file(event.chat_id, path, caption=event.text or "")
-            os.remove(path)
-        else:
-            await event.respond(event.text)
-    # حذف المكتوم
+        try:
+            if event.media:
+                path = await event.download_media()
+                await client.send_file(
+                    event.chat_id,
+                    path,
+                    caption=event.text or "",
+                    reply_to=event.id
+                )
+                os.remove(path)
+            else:
+                await client.send_message(
+                    event.chat_id,
+                    event.text,
+                    reply_to=event.id
+                )
+        except Exception as e:
+            print(f"[❌] خطأ بالتقليد: {e}")
     if (event.is_private and event.sender_id in muted_private) or (
         event.chat_id in muted_groups and event.sender_id in muted_groups[event.chat_id]
     ):
@@ -300,12 +311,9 @@ async def commands(event):
     )
 
 # ───── الحفظ التلقائي (خاص فقط) ─────
-@client.on(
-    events.NewMessage(incoming=True, func=lambda e: e.is_private)  # <-- التعديل هنا
-)
+@client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
 async def auto_save_media(event):
     try:
-        # وسائط مؤقتة (صور، فيديوهات، الخ)
         if event.media and getattr(event.media, "ttl_seconds", None):
             path = await event.download_media("downloads/")
             await client.send_file(
@@ -318,12 +326,9 @@ async def auto_save_media(event):
                 os.remove(path)
             return
 
-        # وسائط صوتية (بصمة صوتية أو فيديو أو صور أو ملفات عادية)
         elif event.media and event.media.document:
             mime = event.media.document.mime_type or ""
-            if any(
-                mime.startswith(x) for x in ["audio/", "video/", "image/", "application/"]
-            ):
+            if any(mime.startswith(x) for x in ["audio/", "video/", "image/", "application/"]):
                 path = await event.download_media("downloads/")
                 await client.send_file("me", path, caption="🎧 تم حفظ البصمة أو الوسائط")
                 if os.path.exists(path):
