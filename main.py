@@ -9,8 +9,7 @@ from telethon.errors import ChatAdminRequiredError
 # ───── بيانات الاتصال ─────
 api_id = 20507759
 api_hash = "225d3a24d84c637b3b816d13cc7bd766"
-session_string ="1ApWapzMBu6vOgZU6ORszv7oDvb1YG3qw4PPoXdP1vaUkL6RH7lWG3Rj3Vt3-ai2kyID0DGo-ZZVtB-fMlRd-nD-AO2-w1Q9qqO3qqp1TzJ21CvwJwL6yo2yavX2BHPHEBiWrEDiHqO01g1zY4t_Kf7dA-01qZqBCzRmDir6htC1VmFkY-GUXUQSqRgskQu3mz42hC-GHQmp-6sc-GRDgOQj_p5CcziJQNUg8wxoMdQlr8tAGBySMM_EPkUXSgKVts4iphZ3jVf_bLnBoj2DiugSN9VKJUhEA7R0cOvlpuC88huj4mUypaJ5OnO-aEghyN5--kFl3hrVVBtmLnGOBuRRloAKxZsY="
-
+session_string = "1ApWapzMBu6vOgZU6ORszv7oDvb1YG3qw4PPoXdP1vaUkL6RH7lWG3Rj3Vt3-ai2kyID0DGo-ZZVtB-fMlRd-nD-AO2-w1Q9qqO3qqp1TzJ21CvwJwL6yo2yavX2BHPHEBiWrEDiHqO01g1zY4t_Kf7dA-01qZqBCzRmDir6htC1VmFkY-GUXUQSqRgskQu3mz42hC-GHQmp-6sc-GRDgOQj_p5CcziJQNUg8wxoMdQlr8tAGBySMM_EPkUXSgKVts4iphZ3jVf_bLnBoj2DiugSN9VKJUhEA7R0cOvlpuC88huj4mUypaJ5OnO-aEghyN5--kFl3hrVVBtmLnGOBuRRloAKxZsY="
 
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 os.makedirs("downloads", exist_ok=True)
@@ -156,9 +155,7 @@ async def mute(event):
     if not await is_owner(event):
         return
     r = await event.get_reply_message()
-    (muted_private if event.is_private else muted_groups.setdefault(event.chat_id, set())).add(
-        r.sender_id
-    )
+    (muted_private if event.is_private else muted_groups.setdefault(event.chat_id, set())).add(r.sender_id)
     await event.reply("🔇 تم كتمه.")
 
 @client.on(events.NewMessage(pattern=r"^\.الغاء الكتم$", func=lambda e: e.is_reply))
@@ -166,9 +163,7 @@ async def unmute(event):
     if not await is_owner(event):
         return
     r = await event.get_reply_message()
-    (muted_private if event.is_private else muted_groups.get(event.chat_id, set())).discard(
-        r.sender_id
-    )
+    (muted_private if event.is_private else muted_groups.get(event.chat_id, set())).discard(r.sender_id)
     await event.reply("🔊 تم فك الكتم.")
 
 @client.on(events.NewMessage(pattern=r"^\.قائمة الكتم$"))
@@ -190,7 +185,7 @@ async def mute_clear(event):
     muted_groups.clear()
     await event.reply("🗑️ تم المسح.")
 
-# ───── تفعيل التقليد ─────
+# ───── تقليد ─────
 @client.on(events.NewMessage(pattern=r"^\.تقليد$", func=lambda e: e.is_reply))
 async def imitate(event):
     if not await is_owner(event):
@@ -203,7 +198,6 @@ async def imitate(event):
     await asyncio.sleep(1)
     await msg.delete()
 
-# ───── إيقاف التقليد ─────
 @client.on(events.NewMessage(pattern=r"^\.لاتقلده$"))
 async def stop_imitate(event):
     if not await is_owner(event):
@@ -214,86 +208,61 @@ async def stop_imitate(event):
     await asyncio.sleep(1)
     await msg.delete()
 
-# ───── تقليد الرسائل ─────
 @client.on(events.NewMessage(incoming=True))
 async def imitate_user(event):
     global imitate_user_id, last_imitated_message_id
-
-    # حذف رسائل المكتومين
     if (event.is_private and event.sender_id in muted_private) or (
-        event.chat_id in muted_groups and event.sender_id in muted_groups[event.chat_id]
-    ):
+        event.chat_id in muted_groups and event.sender_id in muted_groups[event.chat_id]):
         await event.delete()
         return
-
-    # تحقق من الشخص المقلَّد
     if not imitate_user_id or event.sender_id != imitate_user_id:
         return
-
-    # منع تكرار نفس الرسالة
     if last_imitated_message_id == event.id:
         return
     last_imitated_message_id = event.id
-
     try:
         if event.media:
             try:
                 path = await event.download_media()
-                await client.send_file(
-                    event.chat_id,
-                    path,
-                    caption=event.text or "",
-                    reply_to=event.id if event.is_group else None
-                )
+                await client.send_file(event.chat_id, path, caption=event.text or "",
+                                       reply_to=event.id if event.is_group else None)
                 os.remove(path)
             except:
-                pass  # نتخطى الوسائط التي لا يمكن تحميلها
+                pass
         elif event.text:
-            await client.send_message(
-                event.chat_id,
-                event.text,
-                reply_to=event.id if event.is_group else None
-            )
+            await client.send_message(event.chat_id, event.text,
+                                      reply_to=event.id if event.is_group else None)
     except Exception as e:
         print(f"[❌] خطأ بالتقليد: {e}")
 
-# ───── أوامر الترحيب ─────
+# ───── ترحيب ─────
 def get_welcome(chat_id):
-    conf = welcome_config.setdefault(chat_id, {"enabled": False, "text": "👋 أهلاً بك {mention}"})
-    return conf
+    return welcome_config.setdefault(chat_id, {"enabled": False, "text": "👋 أهلاً بك {mention}"})
 
 @client.on(events.NewMessage(pattern=r"^\.تفعيل الترحيب$"))
 async def enable_welcome(event):
-    if not await is_owner(event):
-        return
-    conf = get_welcome(event.chat_id)
-    conf["enabled"] = True
+    if not await is_owner(event): return
+    get_welcome(event.chat_id)["enabled"] = True
     msg = await event.edit("✅ تم تفعيل الترحيب")
     await asyncio.sleep(1)
     await msg.delete()
 
 @client.on(events.NewMessage(pattern=r"^\.تعطيل الترحيب$"))
 async def disable_welcome(event):
-    if not await is_owner(event):
-        return
-    conf = get_welcome(event.chat_id)
-    conf["enabled"] = False
+    if not await is_owner(event): return
+    get_welcome(event.chat_id)["enabled"] = False
     msg = await event.edit("🛑 تم تعطيل الترحيب")
     await asyncio.sleep(1)
     await msg.delete()
 
 @client.on(events.NewMessage(pattern=r"^\.وضع ترحيب (.+)$"))
 async def set_welcome(event):
-    if not await is_owner(event):
-        return
-    text = event.pattern_match.group(1)
-    conf = get_welcome(event.chat_id)
-    conf["text"] = text
+    if not await is_owner(event): return
+    get_welcome(event.chat_id)["text"] = event.pattern_match.group(1)
     msg = await event.edit("✅ تم تحديث رسالة الترحيب")
     await asyncio.sleep(1)
     await msg.delete()
 
-# ───── إرسال الترحيب عند دخول عضو ─────
 @client.on(events.ChatAction)
 async def welcome_new_member(event):
     if not event.is_group or not (event.user_joined or event.user_added):
@@ -312,11 +281,10 @@ async def welcome_new_member(event):
         except Exception as e:
             print(f"[❌] خطأ الترحيب: {e}")
 
-# ───── حفظ / حذف / عرض البصمات ─────
+# ───── حفظ بصمات ─────
 @client.on(events.NewMessage(pattern=r"^\.احفظ (.+)$", func=lambda e: e.is_reply))
 async def save_media(event):
-    if not await is_owner(event):
-        return
+    if not await is_owner(event): return
     name = event.pattern_match.group(1).strip()
     r = await event.get_reply_message()
     if not r.media:
@@ -327,8 +295,7 @@ async def save_media(event):
 
 @client.on(events.NewMessage(pattern=r"^\.حذف (.+)$"))
 async def delete_media(event):
-    if not await is_owner(event):
-        return
+    if not await is_owner(event): return
     name = event.pattern_match.group(1).strip()
     path = saved_media.pop(name, None)
     if path and os.path.exists(path):
@@ -339,8 +306,7 @@ async def delete_media(event):
 
 @client.on(events.NewMessage(pattern=r"^\.قائمة البصمات$"))
 async def list_media(event):
-    if not await is_owner(event):
-        return
+    if not await is_owner(event): return
     if not saved_media:
         return await event.reply("⚠️ لا توجد بصمات.")
     txt = "\n".join(f"• {k}" for k in saved_media)
@@ -348,8 +314,7 @@ async def list_media(event):
 
 @client.on(events.NewMessage(pattern=r"^\.(\w+)$"))
 async def send_media(event):
-    if not await is_owner(event):
-        return
+    if not await is_owner(event): return
     key = event.pattern_match.group(1)
     path = saved_media.get(key)
     if path and os.path.exists(path):
@@ -359,8 +324,7 @@ async def send_media(event):
 # ───── فحص وأوامر ─────
 @client.on(events.NewMessage(pattern=r"^\.فحص$"))
 async def check(event):
-    if not await is_owner(event):
-        return
+    if not await is_owner(event): return
     t0 = datetime.datetime.now()
     msg = await event.edit("⌛")
     await asyncio.sleep(1)
@@ -371,8 +335,7 @@ async def check(event):
 
 @client.on(events.NewMessage(pattern=r"^\.اوامر$"))
 async def commands(event):
-    if not await is_owner(event):
-        return
+    if not await is_owner(event): return
     await event.reply(
         "📘 أوامر البوت:\n\n"
         ".فحص – اختبار البوت\n"
@@ -387,22 +350,17 @@ async def commands(event):
         ".وضع ترحيب <نص>"
     )
 
-# ───── الحفظ التلقائي (خاص فقط) ─────
+# ───── حفظ تلقائي للخاص ─────
 @client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
 async def auto_save_media(event):
     try:
         if event.media and getattr(event.media, "ttl_seconds", None):
             path = await event.download_media("downloads/")
-            await client.send_file(
-                "me",
-                path,
-                caption="📸 تم حفظ الوسائط المؤقتة",
-                ttl_seconds=event.media.ttl_seconds,
-            )
+            await client.send_file("me", path, caption="📸 تم حفظ الوسائط المؤقتة",
+                                   ttl_seconds=event.media.ttl_seconds)
             if os.path.exists(path):
                 os.remove(path)
             return
-
         elif event.media and event.media.document:
             mime = event.media.document.mime_type or ""
             if any(mime.startswith(x) for x in ["audio/", "video/", "image/", "application/"]):
@@ -414,10 +372,13 @@ async def auto_save_media(event):
         print(f"[❌] خطأ أثناء حفظ الوسائط: {e}")
 
 # ───── تشغيل البوت ─────
-# ───── تشغيل البوت ─────
 async def main():
     await client.start()
     await cleanup()
     await client.send_message("me", "✅ تم تشغيل البوت بنجاح.")
     print("✅ Bot is Running")
     await client.run_until_disconnected()
+
+# ───── السطر المهم لتشغيل البوت ─────
+if __name__ == "__main__":
+    asyncio.run(main())
