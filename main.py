@@ -32,8 +32,8 @@ os.makedirs("downloads", exist_ok=True)
 # ───── متغيرات عامة ─────
 muted_private = set()
 muted_groups = {}
-imitate_user_id = None
-last_imitated_message_id = None
+imitate_user_ids = set()  # لدعم تقليد أكثر من شخص
+last_imitated_message_ids = {}  # dict: user_id -> last msg id
 channel_name_tasks = {}
 change_name_task = None
 previous_name = None
@@ -144,7 +144,8 @@ async def stop_channel_name(event):
         await quick_edit(event, "🛑 تم إيقاف الاسم المؤقت للقناة.")
     else:
         await quick_edit(event, "❌ لا يوجد تعديل نشط لهذه القناة.")
-       # ───── كتم / فك كتم ─────
+
+# ───── كتم / فك كتم ─────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def mute(event):
     if not await is_owner(event): return
@@ -186,32 +187,37 @@ async def auto_delete_muted(event):
     if event.chat_id in muted_groups and event.sender_id in muted_groups[event.chat_id]:
         return await event.delete()
 
-# ───── التقليد الذكي ─────
+# ───── التقليد الذكي (يدعم تقليد أكثر من شخص بكل الوسائط) ─────
 @client.on(events.NewMessage(pattern=r"^\.تقليد$", func=lambda e: e.is_reply))
 async def imitate(event):
-    global imitate_user_id
     if not await is_owner(event): return
     reply = await event.get_reply_message()
-    imitate_user_id = reply.sender_id
-    await quick_edit(event, "🔁 جاري تقليده...")
+    imitate_user_ids.add(reply.sender_id)
+    await quick_edit(event, f"🔁 جاري تقليد المستخدم {reply.sender_id} (عدد المقلدين: {len(imitate_user_ids)})")
 
 @client.on(events.NewMessage(pattern=r"^\.ايقاف التقليد$"))
 async def stop_imitate(event):
-    global imitate_user_id
     if not await is_owner(event): return
-    imitate_user_id = None
-    await quick_edit(event, "🛑 تم إيقاف التقليد.")
+    imitate_user_ids.clear()
+    await quick_edit(event, "🛑 تم إيقاف التقليد لجميع المستخدمين.")
 
 @client.on(events.NewMessage(incoming=True))
 async def imitate_user(event):
-    global imitate_user_id, last_imitated_message_id
-    if not imitate_user_id or event.sender_id != imitate_user_id: return
-    if event.id == last_imitated_message_id: return
-    last_imitated_message_id = event.id
-    if event.is_private:
-        await event.reply(file=event.media or None, message=event.raw_text or None)
-    elif event.is_group and event.text:
-        await event.reply(event.text)
+    if event.sender_id not in imitate_user_ids:
+        return
+    last_id = last_imitated_message_ids.get(event.sender_id)
+    if event.id == last_id:
+        return
+    last_imitated_message_ids[event.sender_id] = event.id
+    try:
+        # تقليد كامل مع دعم كل أنواع الوسائط والميديا (بما فيها المؤقتة)
+        if event.media:
+            await event.reply(file=event.media, message=event.raw_text or None)
+        else:
+            # إذا رسالة نص فقط أو غيرها
+            await event.reply(event.raw_text or "")
+    except Exception:
+        pass
 
 # ───── ترحيب تلقائي ─────
 @client.on(events.ChatAction)
@@ -244,15 +250,15 @@ async def set_welcome(event):
     welcome_config[event.chat_id] = {"enabled": True, "message": txt}
     await quick_edit(event, "📩 تم تحديث رسالة الترحيب.")
 
-# ───── حفظ الوسائط المؤقتة من الخاص ─────
+# ───── حفظ الوسائط المؤقتة من الخاص (شامل كل الوسائط والبصمات) ─────
 @client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private and e.media))
 async def save_media(event):
     name = os.path.join("downloads", f"{event.id}")
     try:
         path = await event.download_media(file=name)
         print(f"📥 تم حفظ الوسائط: {path}")
-    except:
-        pass
+    except Exception as e:
+        print(f"❌ خطأ بحفظ الوسائط: {e}")
 
 # ───── كشف معلومات المجموعة ─────
 @client.on(events.NewMessage(pattern=r"^\.كشف$"))
@@ -279,34 +285,46 @@ async def check_status(event):
     await asyncio.sleep(10)
     await event.delete()
 
-# ───── قائمة الأوامر ─────
+# ───── قائمة الأوامر (مطوّرة - خرافية وجذابة) ─────
 @client.on(events.NewMessage(pattern=r"^\.الاوامر$"))
 async def show_commands(event):
     if not await is_owner(event): return
     cmds = """
-🎛️ الأوامر:
+╔══════════════════════╗
+║ 🛸 𝗔𝗹𝘀𝗮𝗯𝗮𝗯 𝗕𝗼𝘁 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀 🛸 ║
+╚══════════════════════╝
 
-👤 الاسم:
-.اسم مؤقت | .ايقاف الاسم
+👤 𝗣𝗿𝗼𝗳𝗶𝗹𝗲 Commands:
+  • .اسم مؤقت      ➤ تفعيل تغيير الاسم المؤقت كل دقيقة
+  • .ايقاف الاسم    ➤ إيقاف تغيير الاسم المؤقت
 
-📢 القناة:
-.اسم قناة <رابط> | .ايقاف اسم قناة <رابط>
+📢 𝗖𝗵𝗮𝗻𝗻𝗲𝗹 Commands:
+  • .اسم قناة <رابط>   ➤ تفعيل تغيير اسم القناة كل دقيقة
+  • .ايقاف اسم قناة <رابط> ➤ إيقاف تغيير اسم القناة
 
-🔇 الكتم:
-.كتم (رد) | .الغاء الكتم (رد)
-.قائمة الكتم | .مسح الكتم
+🔇 𝗠𝘂𝘁𝗲 Commands:
+  • .كتم (رد)       ➤ كتم العضو المردود عليه
+  • .الغاء الكتم (رد) ➤ فك كتم العضو
+  • .قائمة الكتم     ➤ عرض قائمة المكتومين
+  • .مسح الكتم      ➤ مسح جميع المكتومين
 
-🌀 التقليد:
-.تقليد (رد) | .ايقاف التقليد
+🌀 𝗜𝗺𝗶𝘁𝗮𝘁𝗲 Commands:
+  • .تقليد (رد)     ➤ تقليد أكثر من شخص بنفس الوقت بكل الوسائط
+  • .ايقاف التقليد   ➤ إيقاف التقليد فوراً
 
-🌸 الترحيب:
-.تفعيل الترحيب | .تعطيل الترحيب
-.وضع ترحيب <رسالة>
+🌸 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 Commands:
+  • .تفعيل الترحيب  ➤ تفعيل الترحيب التلقائي
+  • .تعطيل الترحيب  ➤ تعطيل الترحيب التلقائي
+  • .وضع ترحيب <رسالة> ➤ تعديل رسالة الترحيب
 
-🕵️ أخرى:
-.كشف | .فحص | .الاوامر
+🕵️ 𝗢𝘁𝗵𝗲𝗿 Commands:
+  • .كشف             ➤ كشف معلومات المجموعة
+  • .فحص             ➤ فحص حالة البوت
+  • .الاوامر          ➤ عرض قائمة الأوامر هذه
+
+═══════════════════════════
 """
-    await quick_edit(event, cmds, delay=8)
+    await quick_edit(event, cmds, delay=12)
 
 # ───── بدء التشغيل ─────
 print("✅ تم تشغيل البوت بنجاح - المطور: الصعب")
