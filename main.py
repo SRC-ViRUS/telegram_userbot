@@ -316,13 +316,100 @@ async def info(event):
     )
     await qedit(event, out, 5)
 
+# ─────────── ايدي ───────────
+@client.on(events.NewMessage(pattern=r"^\.ايدي$"))
+async def get_id(event):
+    if not await is_owner(event): return
+    if event.is_reply:
+        r = await event.get_reply_message()
+        await qedit(event, f"🆔 آيدي الشخص: <code>{r.sender_id}</code>")
+    else:
+        await qedit(event, f"🆔 آيديك: <code>{event.sender_id}</code>")
+
+# ─────────── البنق (Ping) ───────────
+@client.on(events.NewMessage(pattern=r"^\.البنق$"))
+async def ping(event):
+    if not await is_owner(event): return
+    start = datetime.datetime.now()
+    m = await event.edit("🏓 بنق ...")
+    end = datetime.datetime.now()
+    diff = (end - start).microseconds / 1000
+    await m.edit(f"🏓 السرعة: <b>{diff:.2f}ms</b>", parse_mode="html")
+    await asyncio.sleep(5)
+    await m.delete()
+
+# ─────────── تكرار تلقائي ───────────
+repeat_task = None
+
+@client.on(events.NewMessage(pattern=r"^\.تكرار تلقائي (\d+) (.+)$"))
+async def auto_repeat(event):
+    if not await is_owner(event): return
+    global repeat_task
+    seconds = int(event.pattern_match.group(1))
+    text = event.pattern_match.group(2)
+
+    if repeat_task and not repeat_task.done():
+        repeat_task.cancel()
+
+    async def loop():
+        while True:
+            try:
+                await client.send_message(event.chat_id, text)
+            except Exception as e:
+                print("خطأ في التكرار:", e)
+            await asyncio.sleep(seconds)
+
+    repeat_task = asyncio.create_task(loop())
+    await qedit(event, f"🔁 بدأ التكرار كل {seconds} ثانية.")
+
+@client.on(events.NewMessage(pattern=r"^\.ايقاف التكرار$"))
+async def stop_repeat(event):
+    if not await is_owner(event): return
+    global repeat_task
+    if repeat_task:
+        repeat_task.cancel()
+        repeat_task = None
+        await qedit(event, "⛔ تم إيقاف التكرار.")
+    else:
+        await qedit(event, "⚠️ لا يوجد تكرار فعال.")
+
+# ─────────── منشن الكل ───────────
+@client.on(events.NewMessage(pattern=r"^\.منشن (.+)$"))
+async def mention_all(event):
+    if not await is_owner(event): return
+    if not event.is_group:
+        return await qedit(event, "❌ هذا الأمر للقروبات فقط.")
+    
+    msg = event.pattern_match.group(1)
+    mentions = []
+    async for user in client.iter_participants(event.chat_id):
+        if user.bot or user.deleted:
+            continue
+        mention = f"<a href='tg://user?id={user.id}'>.</a>"
+        mentions.append(mention)
+        if len(mentions) == 5:
+            try:
+                await client.send_message(event.chat_id, msg + "\n" + "".join(mentions), parse_mode="html")
+            except Exception as e:
+                print("❌ خطأ منشن:", e)
+            mentions = []
+            await asyncio.sleep(2)
+
+    if mentions:
+        await client.send_message(event.chat_id, msg + "\n" + "".join(mentions), parse_mode="html")
+
+    await qedit(event, "📣 تم المنشن للجميع.")
 # ─────────── قائمة الأوامر ───────────
 @client.on(events.NewMessage(pattern=r"^\.الاوامر$"))
 async def cmds(event):
     if not await is_owner(event): return
     txt = """
 <b>💡 الأوامر:</b>
-
+<code>.ايدي</code> – عرض الآيدي والمعلومات
+<code>.البنق</code> – سرعة البوت ومدة التشغيل
+<code>.تكرار تلقائي [ث] [نص]</code> – إرسال النص دوريًّا
+<code>.ايقاف التكرار</code> – إيقاف التكرار
+<code>.منشن [نص]</code> – منشن كل الأعضاء برسالة
 <code>.مؤقت</code> – تفعيل اسم الوقت للحساب
 <code>.مؤقت توقف</code> – إيقاف الاسم المؤقت للحساب
 
