@@ -67,7 +67,7 @@ async def update_name_loop():
                 pass
         await asyncio.sleep(60)
 
-@client.on(events.NewMessage(pattern=r"^\.اسم مؤقت$"))
+@client.on(events.NewMessage(pattern=r"^\.مؤقت$"))
 async def cmd_name_on(event):
     if not await is_owner(event): return
     global name_task
@@ -76,7 +76,7 @@ async def cmd_name_on(event):
     name_task = asyncio.create_task(loop_name())
     await qedit(event, "🕒 تم تفعيل الاسم المؤقت للحساب.")
 
-@client.on(events.NewMessage(pattern=r"^\.ايقاف الاسم$"))
+@client.on(events.NewMessage(pattern=r"^\.مؤقت توقف$"))
 async def cmd_name_off(event):
     if not await is_owner(event): return
     global name_task, prev_name
@@ -304,10 +304,10 @@ async def cmds(event):
     txt = """
 <b>💡 الأوامر:</b>
 
-<code>.اسم مؤقت</code> – تفعيل اسم الوقت للحساب
-<code>.ايقاف الاسم</code> – إيقاف الاسم المؤقت للحساب
+<code>.مؤقت</code> – تفعيل اسم الوقت للحساب
+<code>.مؤقت توقف</code> – إيقاف الاسم المؤقت للحساب
 
-<code>.اسم مؤقت قروب</code> – تفعيل اسم الوقت للقروب/القناة
+<code>.اسم مؤقت يلكروب</code> – تفعيل اسم الوقت للقروب/القناة
 <code>.ايقاف اسم القروب</code> – إيقاف الاسم المؤقت للقروب
 
 <code>.كتم</code> (رد) – كتم
