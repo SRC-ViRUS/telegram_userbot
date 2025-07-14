@@ -55,39 +55,61 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         await client.send_file(dest, f, caption=caption, ttl=ttl)
         os.remove(f)
 
-# ─────────── الاسم المؤقت للحساب ───────────
-async def update_name_loop():
-    while True:
-        if auto_name:
-            now = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
-            name = now.strftime('%I:%M')
-            try:
-                await client(UpdateProfileRequest(first_name=name))
-            except Exception:
-                pass
-        await asyncio.sleep(60)
+# ─────────── الاسم المؤقت للحساب (وقت فقط – بغداد) ───────────
+
+name_task = None
+prev_name = None
 
 @client.on(events.NewMessage(pattern=r"^\.مؤقت$"))
 async def cmd_name_on(event):
     if not await is_owner(event): return
-    global name_task
+    global name_task, prev_name
+
     if name_task and not name_task.done():
-        return await qedit(event, "✅ مفعل مسبقاً.")
+        return await qedit(event, "✅ الاسم المؤقت مفعل مسبقًا.")
+
+    # حفظ الاسم الأصلي أول مرة فقط
+    if not prev_name:
+        try:
+            me = await client.get_me()
+            prev_name = me.first_name
+        except Exception as e:
+            print("⚠️ فشل في جلب الاسم الأصلي:", e)
+            prev_name = "المستخدم"  # افتراضي
+
+    async def update_name_loop():
+        while True:
+            try:
+                baghdad_time = (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime('%I:%M %p')
+                await client(UpdateProfileRequest(first_name=baghdad_time))
+                print(f"✅ تم تحديث الاسم: {baghdad_time}")
+            except Exception as e:
+                print("❌ خطأ أثناء تحديث الاسم:", e)
+            await asyncio.sleep(60)
+
     name_task = asyncio.create_task(update_name_loop())
-    await qedit(event, "🕒 تم تفعيل الاسم المؤقت للحساب.")
+    await qedit(event, "🕒 تم تفعيل الاسم المؤقت – الوقت فقط.")
+
 @client.on(events.NewMessage(pattern=r"^\.مؤقت توقف$"))
 async def cmd_name_off(event):
     if not await is_owner(event): return
     global name_task, prev_name
+
     if name_task:
         name_task.cancel()
         name_task = None
+    else:
+        return await qedit(event, "⚠️ الاسم المؤقت غير مفعل.")
+
     if prev_name:
         try:
             await client(UpdateProfileRequest(first_name=prev_name))
+            await qedit(event, "🛑 تم إيقاف الاسم المؤقت وإرجاع الاسم السابق.")
         except Exception as e:
-            print("خطأ إرجاع اسم الحساب:", e)
-    await qedit(event, "🛑 تم إيقاف الاسم المؤقت للحساب.")
+            print("⚠️ خطأ في استرجاع الاسم:", e)
+            await qedit(event, "❌ لم يتم إرجاع الاسم تلقائيًا.")
+    else:
+        await qedit(event, "🛑 تم الإيقاف، لا يوجد اسم محفوظ.")
 
 # ─────────── الاسم المؤقت للقروب/القناة ───────────
 async def update_group_title(chat_id):
