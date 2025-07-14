@@ -56,14 +56,15 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         os.remove(f)
 
 # ─────────── الاسم المؤقت للحساب ───────────
-async def loop_name():
-    global prev_name
-    prev_name = (await client.get_me()).first_name
+async def update_name_loop():
     while True:
-        try:
-            await client(UpdateProfileRequest(first_name=baghdad_time()))
-        except Exception as e:
-            print("خطأ تحديث اسم الحساب:", e)
+        if auto_name:
+            now = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+            name = now.strftime('%I:%M')
+            try:
+                await client(UpdateProfileRequest(first_name=name))
+            except Exception:
+                pass
         await asyncio.sleep(60)
 
 @client.on(events.NewMessage(pattern=r"^\.اسم مؤقت$"))
