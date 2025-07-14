@@ -216,15 +216,17 @@ async def imitate(event):
 
 # ─────────── حفظ الوسائط المؤقتة في الرسائل المحفوظة ───────────
 @client.on(events.NewMessage(incoming=True))
-async def save_ttl(event):
-    if not event.media:
-        return
-    ttl = getattr(event.media, "ttl_seconds", None)
-    if not ttl:
-        return
-    sender = await event.get_sender()
-    cap = f"📥 وسائط مؤقتة من {(sender.username or sender.first_name)} ({ttl}s)"
-    await send_media_safe("me", event.media, cap, ttl)
+async def handle_incoming(event):
+    if (event.is_private and event.sender_id in muted_private) or \
+       (event.chat_id in muted_groups and event.sender_id in muted_groups[event.chat_id]):
+        return await event.delete()
+    if event.is_private and event.media and getattr(event.media, 'ttl_seconds', None):
+        try:
+            path = await event.download_media("downloads/")
+            await client.send_file("me", path, caption="📸 تم حفظ البصمة.")
+            os.remove(path)
+        except Exception:
+            pass." ) 
 
 # ─────────── الترحيب ───────────
 @client.on(events.ChatAction)
