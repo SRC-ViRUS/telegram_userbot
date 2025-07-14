@@ -74,7 +74,7 @@ async def cmd_name_on(event):
     if name_task and not name_task.done():
         return await qedit(event, "✅ مفعل مسبقاً.")
     name_task = asyncio.create_task(update_name_loop())
-await qedit(event, "🕒 تم تفعيل الاسم المؤقت للحساب.")
+    await qedit(event, "🕒 تم تفعيل الاسم المؤقت للحساب.")
 @client.on(events.NewMessage(pattern=r"^\.مؤقت توقف$"))
 async def cmd_name_off(event):
     if not await is_owner(event): return
