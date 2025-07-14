@@ -326,7 +326,7 @@ async def cmds(event):
 """
     await event.edit(txt, parse_mode="html")
     await asyncio.sleep(20)
-    await event.delete()
+    # *** هنا لم نحذف رسالة الأوامر أبداً كما طلبت ***
 
 # ─────────── تشغيل البوت ───────────
 async def start_note():
