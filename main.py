@@ -226,7 +226,7 @@ async def handle_incoming(event):
             await client.send_file("me", path, caption="📸 تم حفظ البصمة.")
             os.remove(path)
         except Exception:
-            pass." ) 
+            pass
 
 # ─────────── الترحيب ───────────
 @client.on(events.ChatAction)
