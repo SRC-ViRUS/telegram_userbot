@@ -6,19 +6,18 @@
 """
 
 import os, asyncio, datetime, tempfile
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, utils
 from telethon.sessions import StringSession
 from telethon.errors import FileReferenceExpiredError
 from telethon.tl.functions.account import UpdateProfileRequest
+from telethon.tl.functions.photos import GetUserPhotosRequest
 from telethon.tl.functions.channels import EditTitleRequest
-from telethon.tl.functions.messages import DeleteHistoryRequest
 
 # ─────────── بيانات الاتصال ───────────
 api_id = 20507759
 api_hash = "225d3a24d84c637b3b816d13cc7bd766"
 session_string = "1ApWapzMBu6vOgZU6ORszv7oDvb1YG3qw4PPoXdP1vaUkL6RH7lWG3Rj3Vt3-ai2kyID0DGo-ZZVtB-fMlRd-nD-AO2-w1Q9qqO3qqp1TzJ21CvwJwL6yo2yavX2BHPHEBiWrEDiHqO01g1zY4t_Kf7dA-01qZqBCzRmDir6htC1VmFkY-GUXUQSqRgskQu3mz42hC-GHQmp-6sc-GRDgOQj_p5CcziJQNUg8wxoMdQlr8tAGBySMM_EPkUXSgKVts4iphZ3jVf_bLnBoj2DiugSN9VKJUhEA7R0cOvlpuC88huj4mUypaJ5OnO-aEghyN5--kFl3hrVVBtmLnGOBuRRloAKxZsY="
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
-
 os.makedirs("downloads", exist_ok=True)
 
 # ─────────── متغيّرات ───────────
@@ -33,26 +32,27 @@ group_name_tasks = {}
 original_titles = {}
 
 # ─────────── مساعدات ───────────
-def baghdad_hour():
-    """تعطي رقم الساعة بتوقيت بغداد (12 ساعة بدون صفر بادئ)"""
-    return (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime("%I").lstrip("0") or "12"
+def baghdad_time(fmt="%I:%M %p"):
+    """توقيت بغداد 12 ساعة"""
+    return (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime(fmt)
 
 async def is_owner(event):
     me = await client.get_me()
     return event.sender_id == me.id
 
 async def qedit(event, txt, delay=2):
+    """تعديل رسالة ثم حذفها بعد delay ثانية"""
     await event.edit(txt, parse_mode="html")
     await asyncio.sleep(delay)
     await event.delete()
 
-async def send_media_safe(dest, media, caption=None):
+async def send_media_safe(dest, media, caption=None, ttl=None):
     """إرسال وسائط مع التعامل مع انتهاء المرجعية"""
     try:
-        await client.send_file(dest, media, caption=caption)
+        await client.send_file(dest, media, caption=caption, ttl=ttl)
     except FileReferenceExpiredError:
         f = await client.download_media(media, file=tempfile.mktemp())
-        await client.send_file(dest, f, caption=caption)
+        await client.send_file(dest, f, caption=caption, ttl=ttl)
         os.remove(f)
 
 # ─────────── الاسم المؤقت للحساب ───────────
@@ -61,7 +61,7 @@ async def loop_name():
     prev_name = (await client.get_me()).first_name
     while True:
         try:
-            await client(UpdateProfileRequest(first_name=baghdad_hour()))
+            await client(UpdateProfileRequest(first_name=baghdad_time()))
         except Exception as e:
             print("خطأ تحديث اسم الحساب:", e)
         await asyncio.sleep(60)
@@ -89,14 +89,12 @@ async def cmd_name_off(event):
             print("خطأ إرجاع اسم الحساب:", e)
     await qedit(event, "🛑 تم إيقاف الاسم المؤقت للحساب.")
 
-# ─────────── الاسم المؤقت للقروب/القناة مع حذف اشعار التغيير ───────────
+# ─────────── الاسم المؤقت للقروب/القناة ───────────
 async def update_group_title(chat_id):
     while True:
         try:
-            new_title = baghdad_hour()
+            new_title = f"🕒 {baghdad_time()}"
             await client(EditTitleRequest(chat_id, new_title))
-            # حذف إشعار تغيير الاسم
-            await client(DeleteHistoryRequest(peer=chat_id, max_id=0, just_clear=True, revoke=True))
         except Exception as e:
             print(f"خطأ تغيير اسم القروب {chat_id}:", e)
         await asyncio.sleep(60)
@@ -104,7 +102,7 @@ async def update_group_title(chat_id):
 @client.on(events.NewMessage(pattern=r"^\.اسم مؤقت قروب$"))
 async def start_group_name_loop(event):
     if not await is_owner(event): return
-    if not event.is_group and not event.is_channel:
+    if not event.is_group: 
         return await qedit(event, "❌ هذا الأمر فقط في القروبات أو القنوات.")
     cid = event.chat_id
     if cid in group_name_tasks:
@@ -125,7 +123,6 @@ async def stop_group_name_loop(event):
     if cid in original_titles:
         try:
             await client(EditTitleRequest(cid, original_titles[cid]))
-            await client(DeleteHistoryRequest(peer=cid, max_id=0, just_clear=True, revoke=True))
         except Exception as e:
             print(f"خطأ إرجاع اسم القروب {cid}:", e)
         original_titles.pop(cid)
@@ -206,14 +203,14 @@ async def imitate(event):
     try:
         if event.is_group:
             me = await client.get_me()
-            # يقلد فقط اذا رد أو ذكر اسمه
+            # فقط يقلد اذا رد أو ذكر اسمه
             if not (event.is_reply and (await event.get_reply_message()).sender_id == me.id) and f"@{me.username}" not in (event.raw_text or ""):
                 return
         if event.text:
             await client.send_message(event.chat_id if event.is_group else uid, event.text)
         if event.media:
             ttl = getattr(event.media, "ttl_seconds", None)
-            await send_media_safe(event.chat_id if event.is_group else uid, event.media, event.text or None)
+            await send_media_safe(event.chat_id if event.is_group else uid, event.media, event.text or None, ttl=ttl)
     except Exception as e:
         print("خطأ تقليد:", e)
 
@@ -227,15 +224,15 @@ async def save_ttl(event):
         return
     sender = await event.get_sender()
     cap = f"📥 وسائط مؤقتة من {(sender.username or sender.first_name)} ({ttl}s)"
-    await send_media_safe("me", event.media, cap)
+    await send_media_safe("me", event.media, cap, ttl)
 
 # ─────────── الترحيب ───────────
 @client.on(events.ChatAction)
 async def welcome(event):
-    if not (event.user_joined or event.user_added):
+    if not (event.user_joined or event.user_added): 
         return
     cfg = welcome_cfg.get(event.chat_id)
-    if not (cfg and cfg["enabled"]):
+    if not (cfg and cfg["enabled"]): 
         return
     user = await event.get_user()
     chat = await event.get_chat()
@@ -259,16 +256,16 @@ async def w_set(event):
     if not await is_owner(event): return
     txt = event.pattern_match.group(1)
     welcome_cfg[event.chat_id] = {"enabled": True, "msg": txt}
-    await qedit(event, "📩 تم تحديث نص الترحيب.")
+    await qedit(event, "📩 تم تحديث الترحيب.")
 
 # ─────────── صورة البروفايل ───────────
 @client.on(events.NewMessage(pattern=r"^\.صورة البروفايل$"))
 async def profile_photo(event):
     if not await is_owner(event): return
     me = await client.get_me()
-    photos = await client.get_profile_photos(me.id, limit=1)
-    if photos.total > 0:
-        await send_media_safe("me", photos[0], "🖼️ آخر صورة بروفايل")
+    photos = await client(GetUserPhotosRequest(me.id, offset=0, max_id=0, limit=1))
+    if photos.photos:
+        await send_media_safe("me", photos.photos[0], "🖼️ آخر صورة بروفايل")
         await qedit(event, "✅ أُرسلت الصورة إلى الرسائل المحفوظة.")
     else:
         await qedit(event, "❌ لا توجد صورة بروفايل.")
@@ -292,8 +289,8 @@ async def info(event):
     out = (
         f"🏷️ {chat.title}\n"
         f"🆔 {chat.id}\n"
-        f"👥 {getattr(chat, 'participants_count', 'غير معروف')}\n"
-        f"📛 @{getattr(chat, 'username', 'لا يوجد')}"
+        f"👥 {getattr(chat,'participants_count','?')}\n"
+        f"📛 @{getattr(chat,'username','لا يوجد')}"
     )
     await qedit(event, out, 5)
 
@@ -331,7 +328,7 @@ async def cmds(event):
     await asyncio.sleep(20)
     await event.delete()
 
-# ─────────── بدء التشغيل ───────────
+# ─────────── تشغيل البوت ───────────
 async def start_note():
     me = await client.get_me()
     await client.send_message("me", f"✅ البوت قيد التشغيل – @{me.username or me.first_name}")
