@@ -16,7 +16,6 @@ from telethon.tl.functions.photos import GetUserPhotosRequest
 api_id = 20507759
 api_hash = "225d3a24d84c637b3b816d13cc7bd766"
 session_string = "1ApWapzMBu6vOgZU6ORszv7oDvb1YG3qw4PPoXdP1vaUkL6RH7lWG3Rj3Vt3-ai2kyID0DGo-ZZVtB-fMlRd-nD-AO2-w1Q9qqO3qqp1TzJ21CvwJwL6yo2yavX2BHPHEBiWrEDiHqO01g1zY4t_Kf7dA-01qZqBCzRmDir6htC1VmFkY-GUXUQSqRgskQu3mz42hC-GHQmp-6sc-GRDgOQj_p5CcziJQNUg8wxoMdQlr8tAGBySMM_EPkUXSgKVts4iphZ3jVf_bLnBoj2DiugSN9VKJUhEA7R0cOvlpuC88huj4mUypaJ5OnO-aEghyN5--kFl3hrVVBtmLnGOBuRRloAKxZsY="
-
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 os.makedirs("downloads", exist_ok=True)
 
@@ -30,7 +29,7 @@ name_task = None
 prev_name = None
 
 # ─────────── مساعدات ───────────
-def baghdad_time(fmt="%H:%M"):
+def baghdad_time(fmt="%I:%M %p"):
     return (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime(fmt)
 
 async def is_owner(event):
@@ -43,7 +42,6 @@ async def qedit(event, txt, delay=2):
     await event.delete()
 
 async def send_media_safe(dest, media, caption=None, ttl=None):
-    """حل مشكلة FileReferenceExpiredError بتنزيل الوسائط قبل الإرسال"""
     try:
         await client.send_file(dest, media, caption=caption, ttl=ttl)
     except FileReferenceExpiredError:
@@ -136,17 +134,13 @@ async def cmd_imitate_off(event):
 async def imitate(event):
     uid=event.sender_id
     if uid not in imitate_targets: return
-    # لا تقلد إن تم إيقاف الأمر لاحقاً
-    if uid not in imitate_targets: return
-    # في الجروبات: اقلد فقط عند رد على البوت أو منشنه
-    if event.is_group:
-        me=await client.get_me()
-        if not (event.is_reply and (await event.get_reply_message()).sender_id==me.id or f"@{me.username}" in (event.raw_text or "")):
-            return
-    # منع التكرار
     if last_imitated.get(uid)==event.id: return
     last_imitated[uid]=event.id
     try:
+        if event.is_group:
+            me=await client.get_me()
+            if not (event.is_reply and (await event.get_reply_message()).sender_id==me.id or f"@{me.username}" in (event.raw_text or "")):
+                return
         if event.text:
             await client.send_message(event.chat_id if event.is_group else uid, event.text)
         if event.media:
@@ -155,7 +149,7 @@ async def imitate(event):
     except Exception as e:
         print("خطأ تقليد:",e)
 
-# ─────────── الحفظ التلقائي للوسائط المؤقتة ───────────
+# ─────────── حفظ الوسائط المؤقتة ───────────
 @client.on(events.NewMessage(incoming=True))
 async def save_ttl(event):
     if not event.media: return
