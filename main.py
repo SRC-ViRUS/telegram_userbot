@@ -8,7 +8,7 @@
 import os
 import asyncio
 import datetime
-from telethon import TelegramClient, events, types
+from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.functions.account import UpdateProfileRequest
 from telethon.tl.functions.channels import EditTitleRequest
@@ -17,37 +17,32 @@ from telethon.errors import ChatAdminRequiredError
 # ───── بيانات الاتصال ─────
 api_id = 20507759
 api_hash = "225d3a24d84c637b3b816d13cc7bd766"
-session_string = session_string = "1ApWapzMBu6vOgZU6ORszv7oDvb1YG3qw4PPoXdP1vaUkL6RH7lWG3Rj3Vt3-ai2kyID0DGo-ZZVtB-fMlRd-nD-AO2-w1Q9qqO3qqp1TzJ21CvwJwL6yo2yavX2BHPHEBiWrEDiHqO01g1zY4t_Kf7dA-01qZqBCzRmDir6htC1VmFkY-GUXUQSqRgskQu3mz42hC-GHQmp-6sc-GRDgOQj_p5CcziJQNUg8wxoMdQlr8tAGBySMM_EPkUXSgKVts4iphZ3jVf_bLnBoj2DiugSN9VKJUhEA7R0cOvlpuC88huj4mUypaJ5OnO-aEghyN5--kFl3hrVVBtmLnGOBuRRloAKxZsY="
+# سلسلة الجلسة النهائية – يمكنك تغييرها لاحقًا إذا لزم
+session_string = (
+    "1ApWapzMBu6vOgZU6ORszv7oDvb1YG3qw4PPoXdP1vaUkL6RH7lWG3Rj3Vt3-ai2"
+    "kyID0DGo-ZZVtB-fMlRd-nD-AO2-w1Q9qqO3qqp1TzJ21CvwJwL6yo2yavX2BHP"
+    "HEBiWrEDiHqO01g1zY4t_Kf7dA-01qZqBCzRmDir6htC1VmFkY-GUXUQSqRgskQu"
+    "3mz42hC-GHQmp-6sc-GRDgOQj_p5CcziJQNUg8wxoMdQlr8tAGBySMM_EPkUXSgK"
+    "Vts4iphZ3jVf_bLnBoj2DiugSN9VKJUhEA7R0cOvlpuC88huj4mUypaJ5OnO-aEg"
+    "hyN5--kFl3hrVVBtmLnGOBuRRloAKxZsY="
+)
 
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 os.makedirs("downloads", exist_ok=True)
 
 # ───── متغيرات عامة ─────
-muted_private = set()
-muted_groups = {}
-taqleed_dict = {}
-last_imitated_ids = {}
+muted_private, muted_groups = set(), {}
+taqleed_dict, last_imitated_ids = {}, {}
 channel_name_tasks = {}
-change_name_task = None
-previous_name = None
-last_commands = {}
-welcome_config = {}
+change_name_task, previous_name = None, None
+last_commands, welcome_config = {}, {}
 
 # ───── دوال مساعدة ─────
-def is_spamming(user_id, command, delay=1.5):
-    now = datetime.datetime.now().timestamp()
-    key = f"{user_id}:{command}"
-    if now - last_commands.get(key, 0) < delay:
-        return True
-    last_commands[key] = now
-    return False
-
 def now_baghdad(fmt="%I:%M %p"):
     return (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime(fmt)
 
 async def is_owner(event):
-    me = await client.get_me()
-    return event.sender_id == me.id
+    return event.sender_id == (await client.get_me()).id
 
 async def quick_edit(event, text, delay=1):
     await event.edit(text)
@@ -61,11 +56,12 @@ async def loop_name():
     while True:
         try:
             await client(UpdateProfileRequest(first_name=now_baghdad()))
-        except: pass
+        except Exception:
+            pass
         await asyncio.sleep(60)
 
 @client.on(events.NewMessage(pattern=r"^\.اسم مؤقت$"))
-async def start_name(event):
+async def start_temp_name(event):
     if not await is_owner(event): return
     global change_name_task
     if change_name_task and not change_name_task.done():
@@ -74,7 +70,7 @@ async def start_name(event):
     await quick_edit(event, "🕒 تم تفعيل الاسم المؤقت.")
 
 @client.on(events.NewMessage(pattern=r"^\.ايقاف الاسم$"))
-async def stop_name(event):
+async def stop_temp_name(event):
     if not await is_owner(event): return
     global change_name_task, previous_name
     if change_name_task:
@@ -83,49 +79,52 @@ async def stop_name(event):
     if previous_name:
         try:
             await client(UpdateProfileRequest(first_name=previous_name))
-        except: pass
+        except Exception:
+            pass
     await quick_edit(event, "🛑 تم إيقاف الاسم المؤقت.")
 
 # ───── الاسم المؤقت للقنوات ─────
 @client.on(events.NewMessage(pattern=r"^\.اسم قناة (.+)$"))
-async def start_channel_name(event):
+async def start_channel_title(event):
     if not await is_owner(event): return
     link = event.pattern_match.group(1).strip()
     try:
         channel = await client.get_entity(link)
-    except:
+    except Exception:
         return await quick_edit(event, "❌ رابط غير صالح.")
     if channel.id in channel_name_tasks:
-        return await quick_edit(event, "🔄 الاسم المؤقت للقناة مفعّل مسبقًا.")
+        return await quick_edit(event, "🔄 الاسم المؤقت مفعّل مسبقًا.")
     prev_title = channel.title
 
-    async def update_loop():
+    async def updater():
         while True:
             try:
                 await client(EditTitleRequest(channel, now_baghdad()))
             except ChatAdminRequiredError:
                 break
-            except: pass
+            except Exception:
+                pass
             await asyncio.sleep(60)
 
-    task = asyncio.create_task(update_loop())
+    task = asyncio.create_task(updater())
     channel_name_tasks[channel.id] = {"task": task, "prev": prev_title, "entity": channel}
     await quick_edit(event, "🕒 تم تفعيل الاسم المؤقت للقناة.")
 
 @client.on(events.NewMessage(pattern=r"^\.ايقاف اسم قناة (.+)$"))
-async def stop_channel_name(event):
+async def stop_channel_title(event):
     if not await is_owner(event): return
     link = event.pattern_match.group(1).strip()
     try:
         channel = await client.get_entity(link)
-    except:
+    except Exception:
         return await quick_edit(event, "❌ رابط غير صالح.")
     data = channel_name_tasks.pop(channel.id, None)
     if data:
         data["task"].cancel()
         try:
             await client(EditTitleRequest(data["entity"], data["prev"]))
-        except: pass
+        except Exception:
+            pass
         await quick_edit(event, "🛑 تم إيقاف الاسم المؤقت للقناة.")
     else:
         await quick_edit(event, "❌ لا يوجد تعديل نشط لهذه القناة.")
@@ -172,30 +171,39 @@ async def auto_delete_muted(event):
     if event.chat_id in muted_groups and event.sender_id in muted_groups[event.chat_id]:
         return await event.delete()
 
-# ───── التقليد (خاص وقروب) ─────
+# ───── التقليد (خاص كامل، قروب نص/بصمة/ملصق) ─────
 @client.on(events.NewMessage(pattern=r"^\.تقليد$", func=lambda e: e.is_reply))
-async def cmd_save_taqleed(event):
+async def save_taqleed(event):
     if not await is_owner(event): return
     reply = await event.get_reply_message()
-    if not reply: return await quick_edit(event, "❗ ردّ على رسالة لتقليدها.")
-    taqleed_dict[reply.sender_id] = reply
+    if not reply:
+        return await quick_edit(event, "❗ ردّ على رسالة لتقليدها.")
+    taqleed_dict[reply.sender_id] = reply      # نحفظ كل الرسالة
     await quick_edit(event, "✅ تم حفظ التقليد.")
 
 @client.on(events.NewMessage(incoming=True))
-async def auto_taqleed(event):
+async def do_taqleed(event):
     if event.sender_id not in taqleed_dict:
         return
     saved_msg = taqleed_dict[event.sender_id]
+
+    # منع الحلقة اللانهائية
     if last_imitated_ids.get(event.sender_id) == event.id:
         return
     last_imitated_ids[event.sender_id] = event.id
+
     try:
         if event.is_private:
-            await client.send_message(event.sender_id, saved_msg)
+            # نقل كامل لكل الأنواع
+            await client.forward_messages(event.sender_id, saved_msg, saved_msg.chat_id)
         elif event.is_group:
-            if saved_msg.text or saved_msg.voice or saved_msg.sticker:
-                await event.reply(saved_msg)
-    except: pass
+            # فقط نص / بصمة / ملصق
+            if saved_msg.text:
+                await event.reply(saved_msg.text)
+            elif saved_msg.voice or saved_msg.sticker:
+                await client.forward_messages(event.chat_id, saved_msg, saved_msg.chat_id)
+    except Exception:
+        pass
 
 @client.on(events.NewMessage(pattern=r"^\.ايقاف التقليد$"))
 async def stop_taqleed(event):
@@ -206,39 +214,37 @@ async def stop_taqleed(event):
 
 # ───── حفظ الوسائط المؤقتة تلقائيًا ─────
 @client.on(events.NewMessage(incoming=True))
-async def save_self_destruct_media(event):
-    if not event.media:
-        return
-    ttl = getattr(event.media, "ttl_seconds", 0)
-    if ttl <= 0:
+async def save_ttl_media(event):
+    if not event.media or getattr(event.media, "ttl_seconds", 0) <= 0:
         return
     try:
         sender = await event.get_sender()
         sender_name = f"@{sender.username}" if sender.username else f"ID:{sender.id}"
-    except:
+    except Exception:
         sender_name = f"ID:{event.sender_id}"
     caption = f"📥 وسائط موقّتة من: {sender_name}"
     try:
-        await client.send_message("me", event.message, caption=caption)
+        await client.send_message("me", caption)
+        await client.forward_messages("me", event.message)
     except Exception as e:
-        print(f"[!] فشل حفظ الوسائط: {e}")
+        print(f"[!] خطأ في حفظ الوسائط: {e}")
 
 # ───── الترحيب التلقائي ─────
 @client.on(events.ChatAction)
-async def welcome_new_user(event):
+async def welcome_user(event):
     if not (event.user_joined or event.user_added):
         return
-    chat_id = event.chat_id
-    config = welcome_config.get(chat_id)
-    if config and config.get("enabled", False):
-        user = await event.get_user()
-        msg = config.get("message", "اهلا {الاسم} 🌸").replace("{الاسم}", user.first_name)
-        await client.send_message(chat_id, msg)
+    cfg = welcome_config.get(event.chat_id)
+    if not (cfg and cfg.get("enabled")):
+        return
+    user = await event.get_user()
+    msg = cfg.get("message", "أهلاً {الاسم} 🌸").replace("{الاسم}", user.first_name)
+    await client.send_message(event.chat_id, msg)
 
 @client.on(events.NewMessage(pattern=r"^\.تفعيل الترحيب$"))
 async def enable_welcome(event):
     if not await is_owner(event): return
-    welcome_config[event.chat_id] = {"enabled": True, "message": "اهلا {الاسم} 🌸"}
+    welcome_config[event.chat_id] = {"enabled": True, "message": "أهلاً {الاسم} 🌸"}
     await quick_edit(event, "✅ تم تفعيل الترحيب.")
 
 @client.on(events.NewMessage(pattern=r"^\.تعطيل الترحيب$"))
@@ -256,30 +262,29 @@ async def set_welcome(event):
 
 # ───── فحص، كشف، أوامر ─────
 @client.on(events.NewMessage(pattern=r"^\.كشف$"))
-async def group_info(event):
+async def chat_info(event):
     if not await is_owner(event): return
     if not event.is_group:
-        return await quick_edit(event, "❌ هذا الأمر فقط للمجموعات.")
+        return await quick_edit(event, "❌ هذا الأمر للمجموعات فقط.")
     info = await event.get_chat()
-    msg = f"""
-🏷️ العنوان: {info.title}
-🆔 المعرف: {info.id}
+    txt = f"""🏷️ العنوان: {info.title}
+🆔 المعرّف: {info.id}
 👥 الأعضاء: {getattr(info, 'participants_count', 'غير معروف')}
-📛 اسم المستخدم: @{getattr(info, 'username', 'لا يوجد')}
+📛 @: {getattr(info, 'username', 'لا يوجد')}
 """
-    await quick_edit(event, msg.strip(), delay=10)
+    await quick_edit(event, txt, delay=10)
 
 @client.on(events.NewMessage(pattern=r"^\.فحص$"))
-async def check_status(event):
+async def check_bot(event):
     if not await is_owner(event): return
     await event.edit("⚡ جاري الفحص...")
-    await asyncio.sleep(2)
-    await event.edit("✅ البوت شغال تمام 💯")
-    await asyncio.sleep(10)
+    await asyncio.sleep(1)
+    await event.edit("✅ البوت شغّال ✔️")
+    await asyncio.sleep(8)
     await event.delete()
 
 @client.on(events.NewMessage(pattern=r"^\.الاوامر$"))
-async def show_commands(event):
+async def show_cmds(event):
     if not await is_owner(event): return
     cmds = """
 🎛️ الأوامر:
@@ -291,11 +296,11 @@ async def show_commands(event):
 .اسم قناة <رابط> | .ايقاف اسم قناة <رابط>
 
 🔇 الكتم:
-.كتم (رد) | .الغاء الكتم (رد)
+.كتم (بالرد) | .الغاء الكتم (بالرد)
 .قائمة الكتم | .مسح الكتم
 
 🌀 التقليد:
-.تقليد (رد) | .ايقاف التقليد
+.تقليد (بالرد) | .ايقاف التقليد
 
 🌸 الترحيب:
 .تفعيل الترحيب | .تعطيل الترحيب
@@ -307,13 +312,14 @@ async def show_commands(event):
     await quick_edit(event, cmds, delay=12)
 
 # ───── بدء التشغيل ─────
-async def notify_on_start():
+async def notify_start():
     try:
         me = await client.get_me()
-        await client.send_message("me", f"✅ البوت شغال استاذ صعب، الحساب: @{me.username or me.first_name}")
-    except: pass
+        await client.send_message("me", f"✅ البوت يعمل — @{me.username or me.first_name}")
+    except Exception:
+        pass
 
-print("✅ تم تشغيل البوت بنجاح - المطور: الصعب")
+print("✅ Bot Loaded — المطور: الصعب")
 client.start()
-client.loop.run_until_complete(notify_on_start())
+client.loop.run_until_complete(notify_start())
 client.run_until_disconnected()
