@@ -232,4 +232,111 @@ async def save_ttl(event):
 # ─────────── الترحيب ───────────
 @client.on(events.ChatAction)
 async def welcome(event):
-    if not (
+    if not (event.user_joined or event.user_added):
+        return
+    cfg = welcome_cfg.get(event.chat_id)
+    if not (cfg and cfg["enabled"]):
+        return
+    user = await event.get_user()
+    chat = await event.get_chat()
+    msg = cfg["msg"].format(الاسم=user.first_name, الايدي=user.id, القروب=chat.title)
+    await client.send_message(event.chat_id, msg)
+
+@client.on(events.NewMessage(pattern=r"^\.تفعيل الترحيب$"))
+async def w_on(event):
+    if not await is_owner(event): return
+    welcome_cfg[event.chat_id] = {"enabled": True, "msg": "اهلا {الاسم} 🌸"}
+    await qedit(event, "✅ تم التفعيل.")
+
+@client.on(events.NewMessage(pattern=r"^\.تعطيل الترحيب$"))
+async def w_off(event):
+    if not await is_owner(event): return
+    welcome_cfg[event.chat_id] = {"enabled": False, "msg": " "}
+    await qedit(event, "🛑 تم التعطيل.")
+
+@client.on(events.NewMessage(pattern=r"^\.وضع ترحيب (.+)$"))
+async def w_set(event):
+    if not await is_owner(event): return
+    txt = event.pattern_match.group(1)
+    welcome_cfg[event.chat_id] = {"enabled": True, "msg": txt}
+    await qedit(event, "📩 تم تحديث نص الترحيب.")
+
+# ─────────── صورة البروفايل ───────────
+@client.on(events.NewMessage(pattern=r"^\.صورة البروفايل$"))
+async def profile_photo(event):
+    if not await is_owner(event): return
+    me = await client.get_me()
+    photos = await client.get_profile_photos(me.id, limit=1)
+    if photos.total > 0:
+        await send_media_safe("me", photos[0], "🖼️ آخر صورة بروفايل")
+        await qedit(event, "✅ أُرسلت الصورة إلى الرسائل المحفوظة.")
+    else:
+        await qedit(event, "❌ لا توجد صورة بروفايل.")
+
+# ─────────── فحص وكشف ───────────
+@client.on(events.NewMessage(pattern=r"^\.فحص$"))
+async def check(event):
+    if not await is_owner(event): return
+    await event.edit("⚡ جارٍ الفحص...")
+    await asyncio.sleep(2)
+    await event.edit("✅ البوت شغال.")
+    await asyncio.sleep(5)
+    await event.delete()
+
+@client.on(events.NewMessage(pattern=r"^\.كشف$"))
+async def info(event):
+    if not await is_owner(event): return
+    if not event.is_group:
+        return await qedit(event, "❌ هذا الأمر للمجموعات فقط.")
+    chat = await event.get_chat()
+    out = (
+        f"🏷️ {chat.title}\n"
+        f"🆔 {chat.id}\n"
+        f"👥 {getattr(chat, 'participants_count', 'غير معروف')}\n"
+        f"📛 @{getattr(chat, 'username', 'لا يوجد')}"
+    )
+    await qedit(event, out, 5)
+
+# ─────────── قائمة الأوامر ───────────
+@client.on(events.NewMessage(pattern=r"^\.الاوامر$"))
+async def cmds(event):
+    if not await is_owner(event): return
+    txt = """
+<b>💡 الأوامر:</b>
+
+<code>.اسم مؤقت</code> – تفعيل اسم الوقت للحساب
+<code>.ايقاف الاسم</code> – إيقاف الاسم المؤقت للحساب
+
+<code>.اسم مؤقت قروب</code> – تفعيل اسم الوقت للقروب/القناة
+<code>.ايقاف اسم القروب</code> – إيقاف الاسم المؤقت للقروب
+
+<code>.كتم</code> (رد) – كتم
+<code>.الغاء الكتم</code> (رد) – فك كتم
+<code>.قائمة الكتم</code> – عرض الكتم
+<code>.مسح الكتم</code> – مسح الكتم
+
+<code>.تقليد</code> (رد) – تفعيل التقليد
+<code>.ايقاف التقليد</code> – إيقاف التقليد
+
+<code>.تفعيل الترحيب</code> – تشغيل الترحيب
+<code>.تعطيل الترحيب</code> – إيقاف الترحيب
+<code>.وضع ترحيب نص</code> – تغيير نص الترحيب
+
+<code>.صورة البروفايل</code> – إرسال صورة البروفايل
+<code>.كشف</code> – معلومات القروب
+<code>.فحص</code> – فحص البوت
+<code>.الاوامر</code> – عرض قائمة الأوامر
+"""
+    await event.edit(txt, parse_mode="html")
+    await asyncio.sleep(20)
+    await event.delete()
+
+# ─────────── بدء التشغيل ───────────
+async def start_note():
+    me = await client.get_me()
+    await client.send_message("me", f"✅ البوت قيد التشغيل – @{me.username or me.first_name}")
+
+print("🚀 البوت يعمل – المطور: الصعب")
+client.start()
+client.loop.run_until_complete(start_note())
+client.run_until_disconnected()
