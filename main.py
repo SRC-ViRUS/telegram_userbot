@@ -55,7 +55,7 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         await client.send_file(dest, f, caption=caption, ttl=ttl)
         os.remove(f)
 
-# ─────────── الاسم المؤقت للحساب (وقت فقط 24 ساعة) ───────────
+# ─────────── الاسم المؤقت للحساب (12 ساعة – بغداد – بدون حروف) ───────────
 
 name_task = None
 prev_name = None
@@ -79,8 +79,8 @@ async def cmd_name_on(event):
     async def update_name_loop():
         while True:
             try:
-                # الوقت بصيغة 24 ساعة (بغداد)
-                baghdad_time = (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime('%H:%M')
+                # توقيت بغداد + صيغة 12 ساعة بدون AM/PM
+                baghdad_time = (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime('%I:%M')
                 await client(UpdateProfileRequest(first_name=baghdad_time))
                 print(f"✅ الاسم الحالي: {baghdad_time}")
             except Exception as e:
@@ -88,9 +88,28 @@ async def cmd_name_on(event):
             await asyncio.sleep(60)
 
     name_task = asyncio.create_task(update_name_loop())
-    await qedit(event, "✅ تم تفعيل الاسم المؤقت (الوقت فقط – بدون حروف).")
+    await qedit(event, "✅ تم تفعيل الاسم المؤقت – الوقت فقط (12 ساعة).")
 
 @client.on(events.NewMessage(pattern=r"^\.مؤقت توقف$"))
+async def cmd_name_off(event):
+    if not await is_owner(event): return
+    global name_task, prev_name
+
+    if name_task:
+        name_task.cancel()
+        name_task = None
+    else:
+        return await qedit(event, "⚠️ الاسم المؤقت غير مفعل.")
+
+    if prev_name:
+        try:
+            await client(UpdateProfileRequest(first_name=prev_name))
+            await qedit(event, "🛑 تم إيقاف الاسم المؤقت وإرجاع الاسم الأصلي.")
+        except Exception as e:
+            print("⚠️ فشل في إرجاع الاسم:", e)
+            await qedit(event, "❌ لم يتم إرجاع الاسم تلقائيًا.")
+    else:
+        await qedit(event, "🛑 تم الإيقاف، لا يوجد اسم محفوظ.")
 async def cmd_name_off(event):
     if not await is_owner(event): return
     global name_task, prev_name
