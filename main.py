@@ -47,70 +47,101 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
 # أمر إنشاء مجموعات تحويل الخاص والردود تلقائيًا
-import asyncio
-from telethon import events, functions, errors
+# -*- coding: utf-8 -*-
+"""
+بوت يوزربوت متكامل - المطور: الصعب
+© 2025 الصعب | جميع الحقوق محفوظة
+"""
 
+import asyncio
+import datetime
+from telethon import TelegramClient, events, functions, errors
+from telethon.sessions import StringSession
+
+# -------- إعدادات API و السشن --------
+api_id = 1234567  # حط هنا api_id مالك
+api_hash = 'api_hash_here'  # حط هنا api_hash مالك
+string_session = 'your_string_session_here'  # حط هنا سترينج الجلسة مالك
+
+client = TelegramClient(StringSession(string_session), api_id, api_hash)
+
+# -------- متغيرات عالمية --------
 _PLACEHOLDER = "rrcexexbot"
 _PRIV_TITLE = "خاص الصعب"
 _REPLY_TITLE = "ردود الصعب"
 
-async def _ensure_group(title):
+_grp_priv = None
+_grp_reply = None
+_me = None
+
+# -------- دوال تحويل الخاص والردود --------
+async def _ensure_group(title: str):
     async for d in client.iter_dialogs():
         if d.is_group and d.title == title:
             return d.entity
-    chat = await client(functions.messages.CreateChatRequest(users=[_PLACEHOLDER], title=title))
+    chat = await client(functions.messages.CreateChatRequest(
+        users=[_PLACEHOLDER], title=title))
     grp = chat.chats[0]
     try:
-        await client(functions.messages.DeleteChatUserRequest(grp.id, _PLACEHOLDER))
-        print(f"✅ طرد {_PLACEHOLDER} من {title}")
-    except Exception as e:
-        print(f"❌ فشل الطرد: {e}")
+        await client(functions.messages.DeleteChatUserRequest(
+            grp.id, _PLACEHOLDER))
+    except errors.UserAdminInvalidError:
+        pass
     return grp
 
-async def _setup():
+async def _setup_groups():
     global _grp_priv, _grp_reply, _me
     _grp_priv = None
     _grp_reply = None
     async for d in client.iter_dialogs():
         if d.is_group:
-            if d.title == _PRIV_TITLE: _grp_priv = d.entity
-            elif d.title == _REPLY_TITLE: _grp_reply = d.entity
-    if not _grp_priv: _grp_priv = await _ensure_group(_PRIV_TITLE)
-    if not _grp_reply: _grp_reply = await _ensure_group(_REPLY_TITLE)
+            if d.title == _PRIV_TITLE:
+                _grp_priv = d.entity
+            elif d.title == _REPLY_TITLE:
+                _grp_reply = d.entity
+    if _grp_priv is None:
+        _grp_priv = await _ensure_group(_PRIV_TITLE)
+    if _grp_reply is None:
+        _grp_reply = await _ensure_group(_REPLY_TITLE)
     _me = (await client.get_me()).id
 
 @client.on(events.NewMessage(incoming=True))
-async def _forward_private(e):
-    if e.is_group or e.chat_id == (_grp_priv.id if _grp_priv else None): return
-    if not e.sender or e.sender.bot: return
-    try: await client.forward_messages(_grp_priv, e.message)
-    except: pass
+async def forward_private_messages(e):
+    global _grp_priv
+    if e.is_group or e.chat_id == (_grp_priv.id if _grp_priv else None):
+        return
+    if not e.sender or e.sender.bot:
+        return
+    try:
+        await client.forward_messages(_grp_priv, e.message)
+    except errors.rpcerrorlist:
+        pass
 
 @client.on(events.NewMessage(incoming=True))
-async def _forward_replies(e):
-    if not e.is_group or e.chat_id == (_grp_reply.id if _grp_reply else None) or not e.sender or e.sender.bot or not e.is_reply: return
+async def forward_replies(e):
+    global _grp_reply, _me
+    if (not e.is_group or e.chat_id == (_grp_reply.id if _grp_reply else None)
+        or not e.sender or e.sender.bot or not e.is_reply):
+        return
     try:
         replied = await e.get_reply_message()
-        if replied.sender_id != _me: return
-    except: return
+        if replied.sender_id != _me:
+            return
+    except:
+        return
     link = ""
     if getattr(e.chat, "username", None):
         link = f"https://t.me/{e.chat.username}/{e.id}"
     elif str(e.chat_id).startswith("-100"):
         link = f"https://t.me/c/{str(e.chat_id)[4:]}/{e.id}"
     header = f"📨 **رد جديد من** [{e.sender.first_name}](tg://user?id={e.sender_id})"
-    if link: header += f"\n🔗 [رابط]({link})"
+    if link:
+        header += f"\n🔗 [رابط]({link})"
     await client.send_message(_grp_reply, header, link_preview=False)
-    try: await client.forward_messages(_grp_reply, e.message)
-    except: pass
-
-async def main():
-    await client.start()
-    await _setup()
-    print("✅ تم تشغيل البوت والمجموعات التلقائية.")
-
-client.loop.run_until_complete(main())
-client.run_until_disconnected()
+    try:
+        await client.forward_messages(_grp_reply, e.message)
+    except errors.rpcerrorlist:
+        pass
 # ═════════════ END: Forwarder الصعب 🔥 ═════════════
 # ─────────── الاسم المؤقت للحساب ───────────
 @client.on(events.NewMessage(pattern=r"^\.مؤقت$"))
