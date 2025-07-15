@@ -346,7 +346,7 @@ async def mention_status(event):
 @client.on(events.NewMessage(pattern=r"^\.الاوامر$"))
 async def cmds(event):
     if not await is_owner(event): return
-    txt=\"\"\"<b>💡 الأوامر:</b>
+    txt = """<b>💡 الأوامر:</b>
 
 <code>.ايدي</code> – عرض الآيدي والمعلومات
 <code>.البنق</code> – سرعة البوت
