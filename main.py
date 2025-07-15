@@ -660,13 +660,29 @@ async def cmds(event):
 """
 
     await event.edit(txt, parse_mode="html")
-# ─────────── تشغيل البوت ───────────
+# تعريف دالة إنشاء المجموعات وتسميتها _setup
+async def _setup():
+    global _grp_priv, _grp_reply, _me
+    _grp_priv = None
+    _grp_reply = None
+    async for d in client.iter_dialogs():
+        if d.is_group:
+            if d.title == _PRIV_TITLE:
+                _grp_priv = d.entity
+            elif d.title == _REPLY_TITLE:
+                _grp_reply = d.entity
+    if _grp_priv is None:
+        _grp_priv = await _ensure_group(_PRIV_TITLE)
+    if _grp_reply is None:
+        _grp_reply = await _ensure_group(_REPLY_TITLE)
+    _me = (await client.get_me()).id
+
+# دالة البداية
 async def main():
     await client.start()
-    await _setup()  # ← ينشئ مجموعتي "خاص الصعب" و "ردود الصعب"
-    me = await client.get_me()
-    await client.send_message("me", f"✅ البوت قيد التشغيل – @{me.username or me.first_name}")
-    print("🚀 البوت يعمل – المطور: الصعب")
+    await _setup()  # استدعاء الدالة الصحيحة لإنشاء المجموعات
+    print("✅ تم تشغيل البوت والمجموعات التلقائية.")
 
+# تشغيل البرنامج
 client.loop.run_until_complete(main())
 client.run_until_disconnected()
