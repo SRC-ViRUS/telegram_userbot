@@ -345,10 +345,7 @@ async def mention_status(event):
 # ─────────── قائمة الأوامر ───────────
 @client.on(events.NewMessage(pattern=r"^\.الاوامر$"))
 async def cmds(event):
-    if not await is_owner(event): return
-   @client.on(events.NewMessage(pattern=r"^\.الاوامر$"))
-async def cmds(event):
-    if not await is_owner(event): 
+    if not await is_owner(event):
         return
 
     txt = """<b>💡 الأوامر:</b>
@@ -393,7 +390,6 @@ async def cmds(event):
 """
 
     await event.edit(txt, parse_mode="html")
-
 # ─────────── تشغيل البوت ───────────
 async def start_note():
     me=await client.get_me()
