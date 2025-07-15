@@ -341,7 +341,270 @@ async def enable_mention(event):
 async def mention_status(event):
     if not await is_owner(event): return
     await qedit(event,f"📍 المنشن: {'✅ مفعل' if mention_enabled else '🛑 متوقف'}")
+# ======= START: بايو روتيتور متطور أقصى حد مع بايو واسم وقتي =======
+# © 2025 الصعب | Developer: الصعب | All rights reserved.
+# Tag: #الصعب
+# =======
 
+import asyncio
+from telethon import events, functions
+import datetime
+
+class UltimateBioRotator:
+    def __init__(self, client, default_interval=60):
+        self.client = client
+        self.bio_list = []
+        self.bio_index = 0
+        self.interval = default_interval  # بالثواني، قابل للتعديل
+        self.task = None
+        self.is_running = False
+
+        # البايو و الاسم الوقتي
+        self.temp_bio_task = None
+        self.temp_bio_active = False
+        self.original_first_name = None
+        self.original_last_name = None
+        self.original_bio = None
+
+    async def change_bio_periodically(self):
+        while self.is_running:
+            if not self.bio_list:
+                await asyncio.sleep(self.interval)
+                continue
+
+            bio = self.bio_list[self.bio_index]
+            try:
+                await self.client(functions.account.UpdateProfileRequest(about=bio))
+            except Exception as e:
+                print(f"خطأ بتغيير البايو: {e}")
+
+            self.bio_index = (self.bio_index + 1) % len(self.bio_list)
+            await asyncio.sleep(self.interval)
+
+    async def start(self, event):
+        if self.is_running:
+            await event.reply("⚠️ تغيير البايو التلقائي شغّال بالفعل.")
+            return
+        if not self.bio_list:
+            await event.reply("⚠️ لا توجد بايوهات مضافة، أضف بايوهات أولاً باستخدام `.اضف_بايو`.")
+            return
+        self.is_running = True
+        self.task = asyncio.create_task(self.change_bio_periodically())
+        await event.reply(f"✅ بدأ تغيير البايو تلقائيًا كل {self.interval} ثانية.")
+
+    async def stop(self, event):
+        if self.is_running:
+            self.is_running = False
+            if self.task:
+                self.task.cancel()
+                self.task = None
+            await event.reply("🛑 تم إيقاف تغيير البايو التلقائي.")
+        else:
+            await event.reply("⚠️ التغيير التلقائي غير مفعل.")
+
+    async def add_bio(self, event):
+        text = event.pattern_match.group(1).strip()
+        if not text:
+            await event.reply("❌ لا يمكن إضافة بايو فارغ.")
+            return
+        self.bio_list.append(text)
+        await event.reply(f"✅ تم إضافة البايو: «{text}»\nمجموع البايوهات: {len(self.bio_list)}")
+
+    async def show_bios(self, event):
+        if not self.bio_list:
+            await event.reply("⚠️ قائمة البايوهات فارغة.")
+            return
+        msg = "📋 قائمة البايوهات بالتسلسل:\n\n"
+        for i, bio in enumerate(self.bio_list, 1):
+            msg += f"{i}. {bio}\n"
+        await event.reply(msg)
+
+    async def clear_bios(self, event):
+        self.bio_list.clear()
+        self.bio_index = 0
+        await event.reply("🗑️ تم مسح كل البايوهات.")
+
+    async def set_interval(self, event):
+        try:
+            sec = int(event.pattern_match.group(1))
+            if sec < 5:
+                await event.reply("❌ الفترة قصيرة جداً، يرجى تحديد 5 ثواني أو أكثر.")
+                return
+            self.interval = sec
+            await event.reply(f"⏳ تم تعيين فترة تغيير البايو إلى {self.interval} ثانية.")
+            if self.is_running:
+                await self.stop(event)
+                await self.start(event)
+        except:
+            await event.reply("❌ يرجى إدخال رقم صحيح للثواني. مثال: `.مدة_بايو 60`")
+
+    async def remove_bio(self, event):
+        try:
+            index = int(event.pattern_match.group(1)) - 1
+            if 0 <= index < len(self.bio_list):
+                removed = self.bio_list.pop(index)
+                await event.reply(f"🗑️ تم حذف البايو رقم {index+1}: «{removed}»")
+                if self.bio_index >= len(self.bio_list):
+                    self.bio_index = 0
+            else:
+                await event.reply("❌ رقم غير صالح.")
+        except:
+            await event.reply("❌ استخدم الأمر بهذا الشكل: `.حذف_بايو 2`")
+
+    async def jump_to(self, event):
+        try:
+            index = int(event.pattern_match.group(1)) - 1
+            if 0 <= index < len(self.bio_list):
+                self.bio_index = index
+                await event.reply(f"➡️ تم الانتقال للبايو رقم {index+1}.")
+            else:
+                await event.reply("❌ رقم غير صالح.")
+        except:
+            await event.reply("❌ استخدم الأمر بهذا الشكل: `.اذهب_لبايو 3`")
+
+    # ======= بايو واسم وقتي مع حفظ النسخ الأصلية =======
+    async def set_temp_bio(self, event):
+        if self.temp_bio_active:
+            await event.reply("⚠️ بايو واسم وقتي يعمل حالياً، أوقفه أولاً باستخدام `.ايقاف_بايو_وقتي`.")
+            return
+
+        text = event.pattern_match.group(1).strip()
+        if '/' not in text:
+            await event.reply("❌ استخدم الصيغة: `.بايو_وقتي نص_البايو /MM:SS`")
+            return
+
+        bio_part, time_part = text.rsplit('/', 1)
+        bio_part = bio_part.strip()
+        time_part = time_part.strip()
+
+        try:
+            m, s = time_part.split(':')
+            duration_sec = int(m)*60 + int(s)
+        except:
+            await event.reply("❌ صيغة الوقت خاطئة، يجب أن تكون MM:SS مثل 01:15")
+            return
+
+        # حفظ النسخة الأصلية مرة واحدة فقط
+        if self.original_first_name is None:
+            try:
+                user = await self.client.get_me()
+                self.original_first_name = user.first_name or ""
+                self.original_last_name = user.last_name or ""
+                self.original_bio = user.about or ""
+            except Exception as e:
+                await event.reply(f"❌ خطأ بالحصول على بيانات الحساب: {e}")
+                return
+
+        # تحديث الاسم والبايو المؤقت (نغير الاسم الأول والبايو فقط)
+        new_first = bio_part
+        new_last = ""  # يمكن تعديل هذا لو تريد
+        try:
+            await self.client(functions.account.UpdateProfileRequest(
+                first_name=new_first,
+                last_name=new_last,
+                about=bio_part
+            ))
+        except Exception as e:
+            await event.reply(f"❌ خطأ بتعيين الاسم والبايو المؤقت: {e}")
+            return
+
+        self.temp_bio_active = True
+        await event.reply(f"✅ تم تعيين الاسم والبايو المؤقت لمدة {duration_sec} ثانية.")
+
+        async def revert_profile():
+            await asyncio.sleep(duration_sec)
+            try:
+                await self.client(functions.account.UpdateProfileRequest(
+                    first_name=self.original_first_name,
+                    last_name=self.original_last_name,
+                    about=self.original_bio
+                ))
+                self.temp_bio_active = False
+                self.original_first_name = None
+                self.original_last_name = None
+                self.original_bio = None
+                await event.respond("⏰ انتهى الوقت! تم استرجاع الاسم والبايو الأصلي.")
+            except Exception as e:
+                print(f"خطأ بإرجاع الاسم والبايو الأصلي: {e}")
+
+        self.temp_bio_task = asyncio.create_task(revert_profile())
+
+    async def stop_temp_bio(self, event):
+        if not self.temp_bio_active:
+            await event.reply("⚠️ لا يوجد بايو واسم وقتي يعمل حالياً.")
+            return
+        if self.temp_bio_task:
+            self.temp_bio_task.cancel()
+            self.temp_bio_task = None
+        self.temp_bio_active = False
+
+        try:
+            await self.client(functions.account.UpdateProfileRequest(
+                first_name=self.original_first_name or "",
+                last_name=self.original_last_name or "",
+                about=self.original_bio or ""
+            ))
+            self.original_first_name = None
+            self.original_last_name = None
+            self.original_bio = None
+
+            await event.reply("🛑 تم إيقاف البايو والاسم المؤقت وتم استرجاع القيم الأصلية.")
+        except Exception as e:
+            await event.reply(f"❌ خطأ بإيقاف البايو والاسم المؤقت: {e}")
+
+# ======= END: بايو روتيتور متطور أقصى حد مع بايو واسم وقتي =======
+# © 2025 الصعب | Developer: الصعب | All rights reserved.
+# Tag: #الصعب
+
+# ======= START: ربط أوامر UltimateBioRotator مع اليوزر بوت =======
+# © 2025 الصعب | Developer: الصعب | All rights reserved.
+# Tag: #الصعب
+
+bio_rotator = UltimateBioRotator(client, default_interval=60)
+
+@client.on(events.NewMessage(pattern=r'^\.اضف_بايو (.+)'))
+async def handler_add_bio(event):
+    await bio_rotator.add_bio(event)
+
+@client.on(events.NewMessage(pattern=r'^\.عرض_البايوهات$'))
+async def handler_show_bios(event):
+    await bio_rotator.show_bios(event)
+
+@client.on(events.NewMessage(pattern=r'^\.تشغيل_البايو$'))
+async def handler_start_bio(event):
+    await bio_rotator.start(event)
+
+@client.on(events.NewMessage(pattern=r'^\.ايقاف_البايو$'))
+async def handler_stop_bio(event):
+    await bio_rotator.stop(event)
+
+@client.on(events.NewMessage(pattern=r'^\.مسح_البايوهات$'))
+async def handler_clear_bios(event):
+    await bio_rotator.clear_bios(event)
+
+@client.on(events.NewMessage(pattern=r'^\.مدة_بايو (\d+)$'))
+async def handler_set_interval(event):
+    await bio_rotator.set_interval(event)
+
+@client.on(events.NewMessage(pattern=r'^\.حذف_بايو (\d+)$'))
+async def handler_remove_bio(event):
+    await bio_rotator.remove_bio(event)
+
+@client.on(events.NewMessage(pattern=r'^\.اذهب_لبايو (\d+)$'))
+async def handler_jump_to_bio(event):
+    await bio_rotator.jump_to(event)
+
+@client.on(events.NewMessage(pattern=r'^\.بايو_وقتي (.+)$'))
+async def handler_temp_bio(event):
+    await bio_rotator.set_temp_bio(event)
+
+@client.on(events.NewMessage(pattern=r'^\.ايقاف_بايو_وقتي$'))
+async def handler_stop_temp_bio(event):
+    await bio_rotator.stop_temp_bio(event)
+
+# ======= END: ربط أوامر UltimateBioRotator مع اليوزر بوت =======
+# © 2025 الصعب | Developer: الصعب | All rights reserved.
+# Tag: #الصعب
 # ─────────── قائمة الأوامر ───────────
 @client.on(events.NewMessage(pattern=r"^\.الاوامر$"))
 async def cmds(event):
@@ -349,7 +612,35 @@ async def cmds(event):
         return
 
     txt = """<b>💡 الأوامر:</b>
+.اضف_بايو [نص البايو]
+  ➤ إضافة بايو جديد لقائمة البايوات.
 
+.عرض_البايوهات
+  ➤ عرض كل البايوات المحفوظة.
+
+.تشغيل_البايو
+  ➤ بدء التغيير التلقائي للبايو بالتسلسل.
+
+.ايقاف_البايو
+  ➤ إيقاف التغيير التلقائي.
+
+.مسح_البايوهات
+  ➤ مسح جميع البايوات.
+
+.مدة_بايو [ثواني]
+  ➤ تعيين فترة التغيير بين البايوات (5 ثواني كحد أدنى).
+
+.حذف_بايو [رقم]
+  ➤ حذف بايو حسب رقمه في القائمة.
+
+.اذهب_لبايو [رقم]
+  ➤ تخطي فوراً إلى بايو معين.
+
+.بايو_وقتي [نص البايو /MM:SS]
+  ➤ تعيين بايو واسم مؤقتين لمدة معينة. مثال: `.بايو_وقتي الصعب كاسحكم /01:15`
+
+.ايقاف_بايو_وقتي
+  ➤ إيقاف البايو والاسم المؤقت واسترجاع القيم الأصلية. 
 <code>.ايدي</code> – عرض الآيدي والمعلومات
 <code>.البنق</code> – سرعة البوت ومدة التشغيل
 
