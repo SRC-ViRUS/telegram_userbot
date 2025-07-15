@@ -46,34 +46,6 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         tmp = await client.download_media(media, file=tempfile.mktemp())
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
-# أمر إنشاء مجموعات تحويل الخاص والردود تلقائيًا
-# -*- coding: utf-8 -*-
-"""
-بوت يوزربوت متكامل - المطور: الصعب
-© 2025 الصعب | جميع الحقوق محفوظة
-"""
-
-import asyncio
-import datetime
-from telethon import TelegramClient, events, functions, errors
-from telethon.sessions import StringSession
-
-# -------- إعدادات API و السشن --------
-api_id = 1234567  # حط هنا api_id مالك
-api_hash = 'api_hash_here'  # حط هنا api_hash مالك
-string_session = 'your_string_session_here'  # حط هنا سترينج الجلسة مالك
-
-client = TelegramClient(StringSession(string_session), api_id, api_hash)
-
-# -------- متغيرات عالمية --------
-_PLACEHOLDER = "rrcexexbot"
-_PRIV_TITLE = "خاص الصعب"
-_REPLY_TITLE = "ردود الصعب"
-
-_grp_priv = None
-_grp_reply = None
-_me = None
-
 # -------- دوال تحويل الخاص والردود --------
 async def _ensure_group(title: str):
     async for d in client.iter_dialogs():
