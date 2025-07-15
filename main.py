@@ -373,146 +373,151 @@ async def stop_repeat(event):
     else:
         await qedit(event, "⚠️ لا يوجد تكرار فعال.")
 
-# ─────────── منشن الكل ───────────
-import os
-import asyncio
-import aiohttp
-import random
-from telethon import events
+# ─── ) إعدادات المنشن ───
+DELAY_SECONDS = 5               # تأخير بين كل رسالة والأخرى
+mention_enabled = True          # الحالة الافتراضية للمنشن
 
-MENTION_FILE = "mention_messages.txt"
-GITHUB_RAW_URL = "https://raw.githubusercontent.com/username/repo/main/mention_messages.txt"
+# نصوص الترحيب (يمكن التعديل والإضافة بحرّيـة)
+mention_messages = [
+    "ﻣـسٱ۽ آࢦخـيࢪ يصـاك🫀🤍🍯.",
+    "عـࢪفنـه ؏ـليـك؟ 🌚💗",
+    "مـن وين آݪحـ̷ِْــٰــ۫͜ݪو 🌝",
+    "نتـَٰــۘ❀ـَٰـعرف بــݪطــف",
+    "كافي نوم 🤍",
+    "هَــْهلااا حـيلي 🤍",
+    "ياصـف؟ 🗿",
+    "مِمجَࢪډ شعوٚࢪ 🧘🏾‍♀️.",
+    "نـايـم ڪـاعد🫦؟",
+    "اللطف مخلوق حياتي 💖",
+    "ويـنك 🙄🤍",
+    "هل تقبل الزواج مني🥲",
+    "ويـن طـامـس 🙄♥.",
+    "صبـاح اݪخـير 🫂♥.",
+    "اكلتك المفضلهہَ شننۅ ؟..",
+    "هـلا حٝـب 💙",
+    "بݪشش اتصال تع يحلو ✨🤍",
+    "⌁︙ممكن نتعرفف🙂🍭",
+    "أصبح علئ صوتك🫦.",
+    "اެحَسَسَ اެخذت ڪِلبي ححَࢪفياا 😣ِْ🤍 𓍲 .",
+    "شِكد ععَدډ الي منطِيهم بلۅك؟.. 🥹",
+    "ۿهلا يععَمࢪي 🏷َِ💗",
+    "مسس يـَפــَݪۄ  💞🫶🏻 ",
+    "صــح ألــنــوم يــحـلو 💕😴",
+    "صباحوو توت بالقشطه 🦋🍒",
+    "شونك يحلو 😉 ••",
+    "مس يحلو 🌚👀 ••",
+    "ويــــن طامس يحلو/ه😒 ••",
+    "هاذا الحلو كاتلني يعمه ❤️",
+    "ييحٍحٍ مۆشُ نــفــر عٍآفَيَهّ وُرٍبَي🥺💞🦋",
+    "شلخبار 🚶🏿‍♂️..🙂",
+    "شكد طولك🌝؟",
+    "مـشتاق لعيونك. 🌝🍫.",
+]
 
-mention_messages = []
+# ─── 3) دوال مساعدة ───
+async def is_owner(event) -> bool:
+    """يتحقق أنّ مُرسِل الأمر هو صاحب الحساب."""
+    me = await client.get_me()
+    return event.sender_id == me.id
 
-async def load_mention_messages_from_github():
-    global mention_messages
-    mention_messages = []
-    async with aiohttp.ClientSession() as session:
-        async with session.get(GITHUB_RAW_URL) as resp:
-            if resp.status == 200:
-                text = await resp.text()
-                mention_messages = [line.strip() for line in text.splitlines() if line.strip()]
-                print(f"✅ تم تحميل {len(mention_messages)} نص منشن من GitHub")
-            else:
-                print("❌ فشل تحميل نصوص المنشن من GitHub")
-    if os.path.exists(MENTION_FILE):
-        with open(MENTION_FILE, "r", encoding="utf-8") as f:
-            local_lines = [line.strip() for line in f if line.strip()]
-        mention_messages.extend(x for x in local_lines if x not in mention_messages)
-        print(f"✅ أُضيفت {len(local_lines)} نصوص من الملف المحلي")
+async def qedit(event, text: str):
+    """تعديل رسالة الأمر بسرعة."""
+    await event.edit(text)
 
-def save_mention_messages():
-    with open(MENTION_FILE, "w", encoding="utf-8") as f:
-        for line in mention_messages:
-            f.write(line + "\n")
-
-@client.on(events.NewMessage(pattern=r"^\.منشن اضف (.+)$"))
-async def add_mention_msg(event):
-    if not await is_owner(event): return
-    new_msg = event.pattern_match.group(1).strip()
-    if new_msg in mention_messages:
-        return await qedit(event, "⚠️ النص موجود مسبقاً.")
-    if len(mention_messages) >= 1000:
-        return await qedit(event, "⚠️ لا يمكن إضافة أكثر من 1000 نص.")
-    mention_messages.append(new_msg)
-    save_mention_messages()
-    await qedit(event, "✅ تم إضافة نص المنشن.")
-
-@client.on(events.NewMessage(pattern=r"^\.منشن حذف (.+)$"))
-async def delete_mention_msg(event):
-    if not await is_owner(event): return
-    del_msg = event.pattern_match.group(1).strip()
-    if del_msg not in mention_messages:
-        return await qedit(event, "⚠️ النص غير موجود.")
-    mention_messages.remove(del_msg)
-    save_mention_messages()
-    await qedit(event, "🗑️ تم حذف النص.")
-
-@client.on(events.NewMessage(pattern=r"^\.منشن قائمة$"))
-async def list_mention_msgs(event):
-    if not await is_owner(event): return
-    if not mention_messages:
-        return await qedit(event, "⚠️ لا توجد نصوص منشن محفوظة.")
-    text = "<b>📋 قائمة نصوص المنشن:</b>\n\n"
-    for i, msg in enumerate(mention_messages, 1):
-        text += f"{i}. {msg}\n"
-        if i % 20 == 0:
-            await event.edit(text, parse_mode="html")
-            await asyncio.sleep(3)
-            text = ""
-    if text:
-        await event.edit(text, parse_mode="html")
-    await asyncio.sleep(10)
-    await event.delete()
-
-@client.on(events.NewMessage(pattern=r"^\.منشن مسح$"))
-async def clear_mention_msgs(event):
-    if not await is_owner(event): return
-    mention_messages.clear()
-    save_mention_messages()
-    await qedit(event, "🗑️ تم مسح جميع نصوص المنشن.")
-
+# ─── 4) أوامر المنشن ───
 @client.on(events.NewMessage(pattern=r"^\.منشن$"))
 async def mention_all(event):
-    if not await is_owner(event): return
+    """يبدأ منشن الأعضاء برسالة كل 5 ثوانٍ."""
+    global mention_enabled
+    if not await is_owner(event):
+        return
+    if not mention_enabled:
+        return await qedit(event, "⚠️ المنشن معطّل حاليّاً.")
     if not event.is_group:
-        return await qedit(event, "❌ هذا الأمر للقروبات فقط.")
-    if not mention_messages:
-        return await qedit(event, "⚠️ لا توجد نصوص منشن محفوظة، أضف نصوص أولاً.")
+        return await qedit(event, "❌ هذا الأمر يعمل في القروبات فقط.")
 
-    users = []
-    async for user in client.iter_participants(event.chat_id):
-        if user.bot or user.deleted:
-            continue
-        users.append(user)
+    # جلب الأعضاء (استبعاد البوتات والمحذوفين)
+    try:
+        users = [
+            u async for u in client.iter_participants(event.chat_id)
+            if not u.bot and not u.deleted
+        ]
+    except Exception as err:
+        return await qedit(event, f"❌ خطأ بجلب الأعضاء: {err}")
+
     if not users:
-        return await qedit(event, "⚠️ لم أتمكن من جلب أعضاء المجموعة.")
+        return await qedit(event, "⚠️ لم أجد أعضاء في هذه المجموعة.")
 
-    await event.edit(f"🔄 جارٍ منشن {len(users)} عضو...")
+    await qedit(event, f"🔁 جاري منشن {len(users)} عضو...")
 
     used_texts = set()
     for user in users:
-        # اختر نص منشن عشوائي بدون تكرار للنصوص حتى لا يعاد استخدامها قبل انتهاء الكل
-        available_texts = [t for t in mention_messages if t not in used_texts]
-        if not available_texts:
-            used_texts.clear()
-            available_texts = mention_messages[:]
-        text = random.choice(available_texts)
+        # اختيار نص ترحيب عشوائي بدون تكرار حتى تنفد القائمة
+        available = [t for t in mention_messages if t not in used_texts] or mention_messages
+        text = random.choice(available)
         used_texts.add(text)
 
-        # شكل المنشن مع الاسم واليوزر (إذا موجود)
-        username = f"@{user.username}" if user.username else user.first_name
-        mention = f"<a href='tg://user?id={user.id}'>{username}</a>"
-
+        # منشن بالاسم فقط
+        mention = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
         try:
             await client.send_message(event.chat_id, f"{text} {mention}", parse_mode="html")
-            await asyncio.sleep(3)
-        except Exception as e:
-            print(f"❌ خطأ أثناء المنشن: {e}")
+            await asyncio.sleep(DELAY_SECONDS)
+        except Exception as err:
+            print(f"❌ خطأ أثناء المنشن لـ {user.id}: {err}")
 
-    await qedit(event, "✅ تم منشن كل الأعضاء بنجاح.")
+    await client.send_message(event.chat_id, "✅ تم منشن الجميع بنجاح ✔️")
+
+# ─── 5) أوامر التحكم ───
+@client.on(events.NewMessage(pattern=r"^\.لاتمنشن$"))
+async def disable_mention(event):
+    global mention_enabled
+    if not await is_owner(event):
+        return
+    mention_enabled = False
+    await qedit(event, "🛑 تم تعطيل المنشن.")
+
+@client.on(events.NewMessage(pattern=r"^\.منشن تفعيل$"))
+async def enable_mention(event):
+    global mention_enabled
+    if not await is_owner(event):
+        return
+    mention_enabled = True
+    await qedit(event, "✅ تم تفعيل المنشن.")
+
+@client.on(events.NewMessage(pattern=r"^\.منشن حالة$"))
+async def mention_status(event):
+    if not await is_owner(event):
+        return
+    status = "✅ مفعل" if mention_enabled else "🛑 معطل"
+    await qedit(event, f"📍 حالة المنشن: {status}")  
 # ─────────── قائمة الأوامر ───────────
 @client.on(events.NewMessage(pattern=r"^\.الاوامر$"))
 async def cmds(event):
     if not await is_owner(event): return
     txt = """
 <b>💡 الأوامر:</b>
+
 <code>.ايدي</code> – عرض الآيدي والمعلومات
+
 <code>.البنق</code> – سرعة البوت ومدة التشغيل
+
 <code>.تكرار تلقائي [ث] [نص]</code> – إرسال النص دوريًّا
+
 <code>.ايقاف التكرار</code> – إيقاف التكرار
+
 <b>📝 أوامر منشن متقدمة:</b>
+.منشن
+↳ منشن كل أعضاء القروب برسائل ترحيب (واحدة كل 5 ثواني)
 
-<code>.منشن</code> – منشن لكل أعضاء القروب بنصوص عشوائية محفوظة (لكل عضو تاك منفصل مع الاسم أو اليوزر)
+.لاتمنشن
+↳ إيقاف أمر المنشن نهائياً
 
-<code>.منشن اضف نص</code> – إضافة نص جديد لقائمة نصوص المنشن (حتى 1000 نص)
+.منشن تفعيل
+↳ تفعيل أمر المنشن بعد الإيقاف
 
-<code>.منشن حذف نص</code> – حذف نص موجود من قائمة نصوص المنشن
+.منشن حالة
+↳ عرض حالة المنشن (مفعل ✅ / معطل 🛑) 
 
-<code>.منشن قائمة</code> – عرض قائمة نصوص المنشن المحفوظة
-
-<code>.منشن مسح</code> – مسح جميع نصوص المنشن المحفوظة<code>.مؤقت</code> – تفعيل اسم الوقت للحساب
 <code>.مؤقت توقف</code> – إيقاف الاسم المؤقت للحساب
 
 <code>.اسم مؤقت يلكروب</code> – تفعيل اسم الوقت للقروب/القناة
