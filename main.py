@@ -91,7 +91,6 @@ async def _setup():
     _grp_priv  = await _ensure_group(_PRIV_TITLE)
     _grp_reply = await _ensure_group(_REPLY_TITLE)
     _me        = (await client.get_me()).id
-client.loop.run_until_complete(_setup())
 
 # ░░ تحويل رسائل الخاص → «خاص الصعب»
 @client.on(events.NewMessage(incoming=True))
@@ -113,7 +112,7 @@ async def _forward_replies(e):
         replied = await e.get_reply_message()
         if replied.sender_id != _me:
             return                # ليس ردًا عليك
-    except:                       # رسالة قديمة جدًا أو محذوفة
+    except:
         return
 
     # رابط الرسالة إن أمكن
@@ -133,6 +132,15 @@ async def _forward_replies(e):
         await client.forward_messages(_grp_reply, e.message)
     except errors.rpcerrorlist:
         pass
+
+# ░░ تشغيل البوت وتفعيل الإنشاء الآمن
+async def main():
+    await client.start()
+    await _setup()
+    print("✅ تم تشغيل البوت والمجموعات التلقائية.")
+
+client.loop.run_until_complete(main())
+client.run_until_disconnected()
 
 # ═════════════ END: Forwarder الصعب 🔥 ═════════════
 # ─────────── الاسم المؤقت للحساب ───────────
@@ -681,11 +689,12 @@ async def cmds(event):
 
     await event.edit(txt, parse_mode="html")
 # ─────────── تشغيل البوت ───────────
-async def start_note():
-    me=await client.get_me()
-    await client.send_message("me",f"✅ البوت قيد التشغيل – @{me.username or me.first_name}")
+async def main():
+    await client.start()
+    await _setup()  # ← ينشئ مجموعتي "خاص الصعب" و "ردود الصعب"
+    me = await client.get_me()
+    await client.send_message("me", f"✅ البوت قيد التشغيل – @{me.username or me.first_name}")
+    print("🚀 البوت يعمل – المطور: الصعب")
 
-print("🚀 البوت يعمل – المطور: الصعب")
-client.start()
-client.loop.run_until_complete(start_note())
+client.loop.run_until_complete(main())
 client.run_until_disconnected()
