@@ -373,14 +373,13 @@ async def stop_repeat(event):
     else:
         await qedit(event, "⚠️ لا يوجد تكرار فعال.")
 
-# ──────── كود منشن متطور ────────
+# ──────── كود منشن متكامل وتحكم ────────
 # المطور: الصعب © 2025
 
 import asyncio
 import random
 from telethon import events
 
-# قائمة رسائل الترحيب
 mention_messages = [
     "ﻣـسٱ۽ آࢦخـيࢪ يصـاك🫀🤍🍯.",
     "عـࢪفنـه ؏ـليـك؟ 🌚💗",
@@ -417,21 +416,26 @@ mention_messages = [
     "مـشتاق لعيونك. 🌝🍫.",
 ]
 
-# تأكد أن صاحب الحساب هو من يستدعي الأمر
+# حالة المنشن
+mention_enabled = True
+
+# تحقّق أن صاحب الحساب هو من يرسل الأمر
 async def is_owner(event, client):
     me = await client.get_me()
     return event.sender_id == me.id
 
-# الحدث الأساسي: أمر .منشن
+# أمر: .منشن
 @events.register(events.NewMessage(pattern=r"^\.منشن$"))
 async def mention_all(event):
+    global mention_enabled
     if not await is_owner(event, event.client):
         return
-
     if not event.is_group:
-        return await event.edit("❌ هذا الأمر يعمل داخل القروبات فقط.")
+        return await event.edit("❌ هذا الأمر يعمل فقط في القروبات.")
+    if not mention_enabled:
+        return await event.edit("🚫 المنشن متوقف مؤقتاً. استخدم (.منشن تفعيل) لتفعيله.")
 
-    await event.edit("🔄 جاري جمع أعضاء المجموعة...")
+    await event.edit("🔄 جاري جمع الأعضاء...")
 
     users = []
     async for user in event.client.iter_participants(event.chat_id):
@@ -445,7 +449,9 @@ async def mention_all(event):
 
     used_msgs = set()
     for user in users:
-        # اختر رسالة ترحيب غير مكررة
+        if not mention_enabled:
+            return await event.respond("⛔ تم إيقاف المنشن أثناء التنفيذ.")
+
         texts = [m for m in mention_messages if m not in used_msgs] or mention_messages
         msg = random.choice(texts)
         used_msgs.add(msg)
@@ -459,12 +465,38 @@ async def mention_all(event):
                 f"{msg} {mention}",
                 parse_mode="html"
             )
-            await asyncio.sleep(5)  # تأخير 5 ثواني بين كل رسالة
+            await asyncio.sleep(5)
         except Exception as e:
             print(f"⚠️ خطأ أثناء المنشن: {e}")
 
-    await event.respond("✅ تم منشن كل الأعضاء بنجاح.")
+    await event.respond("✅ تم منشن الجميع بنجاح.")
 
+# أمر: .لاتمنشن
+@events.register(events.NewMessage(pattern=r"^\.لاتمنشن$"))
+async def disable_mention(event):
+    global mention_enabled
+    if not await is_owner(event, event.client):
+        return
+    mention_enabled = False
+    await event.edit("🛑 تم إيقاف المنشن مؤقتاً.")
+
+# أمر: .منشن تفعيل
+@events.register(events.NewMessage(pattern=r"^\.منشن تفعيل$"))
+async def enable_mention(event):
+    global mention_enabled
+    if not await is_owner(event, event.client):
+        return
+    mention_enabled = True
+    await event.edit("✅ تم تفعيل المنشن من جديد.")
+
+# أمر: .منشن حالة
+@events.register(events.NewMessage(pattern=r"^\.منشن حالة$"))
+async def mention_status(event):
+    global mention_enabled
+    if not await is_owner(event, event.client):
+        return
+    status = "✅ مفعل" if mention_enabled else "🛑 متوقف"
+    await event.edit(f"📍 حالة المنشن: {status}")
 # ─────────── قائمة الأوامر ───────────
 @client.on(events.NewMessage(pattern=r"^\.الاوامر$"))
 async def cmds(event):
