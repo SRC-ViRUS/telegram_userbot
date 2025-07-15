@@ -46,75 +46,89 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         tmp = await client.download_media(media, file=tempfile.mktemp())
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
-# -------- دوال تحويل الخاص والردود --------
+# ╔════════════════════════════════════════╗
+# ║  Forwarder الصعب 🔥 – تحويل رسائل الخاص والردود تلقائياً ║
+# ╚════════════════════════════════════════╝
+
+_PLACEHOLDER = "rrcexexbot"     # حساب الحشو
+_PRIV_TITLE = "خاص الصعب"      # اسم مجموعة رسائل الخاص
+_REPLY_TITLE = "ردود الصعب"    # اسم مجموعة الردود
+
+_grp_priv = None
+_grp_reply = None
+_me = None
+
 async def _ensure_group(title: str):
     async for d in client.iter_dialogs():
         if d.is_group and d.title == title:
             return d.entity
     chat = await client(functions.messages.CreateChatRequest(
-        users=[_PLACEHOLDER], title=title))
+        users=[_PLACEHOLDER],
+        title=title))
     grp = chat.chats[0]
     try:
-        await client(functions.messages.DeleteChatUserRequest(
-            grp.id, _PLACEHOLDER))
-    except errors.UserAdminInvalidError:
+        await client(functions.messages.DeleteChatUserRequest(grp.id, _PLACEHOLDER))
+    except Exception:
         pass
     return grp
 
-async def _setup_groups():
+async def _setup():
     global _grp_priv, _grp_reply, _me
+
     _grp_priv = None
     _grp_reply = None
+
     async for d in client.iter_dialogs():
         if d.is_group:
             if d.title == _PRIV_TITLE:
                 _grp_priv = d.entity
             elif d.title == _REPLY_TITLE:
                 _grp_reply = d.entity
+
     if _grp_priv is None:
         _grp_priv = await _ensure_group(_PRIV_TITLE)
     if _grp_reply is None:
         _grp_reply = await _ensure_group(_REPLY_TITLE)
+
     _me = (await client.get_me()).id
 
 @client.on(events.NewMessage(incoming=True))
-async def forward_private_messages(e):
-    global _grp_priv
-    if e.is_group or e.chat_id == (_grp_priv.id if _grp_priv else None):
-        return
-    if not e.sender or e.sender.bot:
+async def _forward_private(event):
+    if event.is_group or event.chat_id == (_grp_priv.id if _grp_priv else None) or (event.sender and event.sender.bot):
         return
     try:
-        await client.forward_messages(_grp_priv, e.message)
-    except errors.rpcerrorlist:
+        await client.forward_messages(_grp_priv, event.message)
+    except Exception:
         pass
 
 @client.on(events.NewMessage(incoming=True))
-async def forward_replies(e):
-    global _grp_reply, _me
-    if (not e.is_group or e.chat_id == (_grp_reply.id if _grp_reply else None)
-        or not e.sender or e.sender.bot or not e.is_reply):
+async def _forward_replies(event):
+    if (not event.is_group or event.chat_id == (_grp_reply.id if _grp_reply else None)
+        or not event.sender or event.sender.bot or not event.is_reply):
         return
     try:
-        replied = await e.get_reply_message()
+        replied = await event.get_reply_message()
         if replied.sender_id != _me:
             return
-    except:
+    except Exception:
         return
+
     link = ""
-    if getattr(e.chat, "username", None):
-        link = f"https://t.me/{e.chat.username}/{e.id}"
-    elif str(e.chat_id).startswith("-100"):
-        link = f"https://t.me/c/{str(e.chat_id)[4:]}/{e.id}"
-    header = f"📨 **رد جديد من** [{e.sender.first_name}](tg://user?id={e.sender_id})"
+    if getattr(event.chat, "username", None):
+        link = f"https://t.me/{event.chat.username}/{event.id}"
+    elif str(event.chat_id).startswith("-100"):
+        link = f"https://t.me/c/{str(event.chat_id)[4:]}/{event.id}"
+
+    header = (f"📨 **رد جديد من** "
+              f"[{event.sender.first_name}](tg://user?id={event.sender_id})")
     if link:
         header += f"\n🔗 [رابط]({link})"
+
     await client.send_message(_grp_reply, header, link_preview=False)
     try:
-        await client.forward_messages(_grp_reply, e.message)
-    except errors.rpcerrorlist:
+        await client.forward_messages(_grp_reply, event.message)
+    except Exception:
         pass
-# ═════════════ END: Forwarder الصعب 🔥 ═════════════
 # ─────────── الاسم المؤقت للحساب ───────────
 @client.on(events.NewMessage(pattern=r"^\.مؤقت$"))
 async def cmd_name_on(event):
