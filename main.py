@@ -373,11 +373,13 @@ async def stop_repeat(event):
     else:
         await qedit(event, "⚠️ لا يوجد تكرار فعال.")
 
-# ─── ) إعدادات المنشن ───
-DELAY_SECONDS = 5               # تأخير بين كل رسالة والأخرى
-mention_enabled = True          # الحالة الافتراضية للمنشن
+# mention_simple.py
 
-# نصوص الترحيب (يمكن التعديل والإضافة بحرّيـة)
+import asyncio
+import random
+from telethon import events
+
+# قائمة الترحيبات (رسائلك كلها محفوظة)
 mention_messages = [
     "ﻣـسٱ۽ آࢦخـيࢪ يصـاك🫀🤍🍯.",
     "عـࢪفنـه ؏ـليـك؟ 🌚💗",
@@ -414,82 +416,50 @@ mention_messages = [
     "مـشتاق لعيونك. 🌝🍫.",
 ]
 
-# ─── 3) دوال مساعدة ───
-async def is_owner(event) -> bool:
-    """يتحقق أنّ مُرسِل الأمر هو صاحب الحساب."""
+# تحقق أن صاحب الجلسة هو الذي يرسل الأمر
+async def is_owner(event, client):
     me = await client.get_me()
     return event.sender_id == me.id
 
-async def qedit(event, text: str):
-    """تعديل رسالة الأمر بسرعة."""
-    await event.edit(text)
-
-# ─── 4) أوامر المنشن ───
-@client.on(events.NewMessage(pattern=r"^\.منشن$"))
+# أمر المنشن
+@events.register(events.NewMessage(pattern=r"^\.منشن$"))
 async def mention_all(event):
-    """يبدأ منشن الأعضاء برسالة كل 5 ثوانٍ."""
-    global mention_enabled
-    if not await is_owner(event):
+    if not await is_owner(event, event.client):
         return
-    if not mention_enabled:
-        return await qedit(event, "⚠️ المنشن معطّل حاليّاً.")
     if not event.is_group:
-        return await qedit(event, "❌ هذا الأمر يعمل في القروبات فقط.")
+        return await event.edit("❌ هذا الأمر مخصص فقط للقروبات.")
 
-    # جلب الأعضاء (استبعاد البوتات والمحذوفين)
-    try:
-        users = [
-            u async for u in client.iter_participants(event.chat_id)
-            if not u.bot and not u.deleted
-        ]
-    except Exception as err:
-        return await qedit(event, f"❌ خطأ بجلب الأعضاء: {err}")
+    await event.edit("🔄 جاري جمع الأعضاء...")
+
+    users = []
+    async for user in event.client.iter_participants(event.chat_id):
+        if not user.bot and not user.deleted:
+            users.append(user)
 
     if not users:
-        return await qedit(event, "⚠️ لم أجد أعضاء في هذه المجموعة.")
+        return await event.edit("⚠️ لا يوجد أعضاء للمنشن.")
 
-    await qedit(event, f"🔁 جاري منشن {len(users)} عضو...")
+    await event.edit(f"🚀 جاري منشن {len(users)} عضو...")
 
-    used_texts = set()
+    used_msgs = set()
     for user in users:
-        # اختيار نص ترحيب عشوائي بدون تكرار حتى تنفد القائمة
-        available = [t for t in mention_messages if t not in used_texts] or mention_messages
-        text = random.choice(available)
-        used_texts.add(text)
+        texts = [msg for msg in mention_messages if msg not in used_msgs]
+        if not texts:
+            used_msgs.clear()
+            texts = mention_messages[:]
+        msg = random.choice(texts)
+        used_msgs.add(msg)
 
-        # منشن بالاسم فقط
-        mention = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
+        name = user.first_name or "صديق"
+        mention = f"<a href='tg://user?id={user.id}'>{name}</a>"
+
         try:
-            await client.send_message(event.chat_id, f"{text} {mention}", parse_mode="html")
-            await asyncio.sleep(DELAY_SECONDS)
-        except Exception as err:
-            print(f"❌ خطأ أثناء المنشن لـ {user.id}: {err}")
+            await event.client.send_message(event.chat_id, f"{msg} {mention}", parse_mode="html")
+            await asyncio.sleep(5)  # تأخير 5 ثواني بين كل رسالة
+        except Exception as e:
+            print(f"⚠️ خطأ عند منشن {user.id}: {e}")
 
-    await client.send_message(event.chat_id, "✅ تم منشن الجميع بنجاح ✔️")
-
-# ─── 5) أوامر التحكم ───
-@client.on(events.NewMessage(pattern=r"^\.لاتمنشن$"))
-async def disable_mention(event):
-    global mention_enabled
-    if not await is_owner(event):
-        return
-    mention_enabled = False
-    await qedit(event, "🛑 تم تعطيل المنشن.")
-
-@client.on(events.NewMessage(pattern=r"^\.منشن تفعيل$"))
-async def enable_mention(event):
-    global mention_enabled
-    if not await is_owner(event):
-        return
-    mention_enabled = True
-    await qedit(event, "✅ تم تفعيل المنشن.")
-
-@client.on(events.NewMessage(pattern=r"^\.منشن حالة$"))
-async def mention_status(event):
-    if not await is_owner(event):
-        return
-    status = "✅ مفعل" if mention_enabled else "🛑 معطل"
-    await qedit(event, f"📍 حالة المنشن: {status}")  
+    await event.respond("✅ تم منشن الجميع بنجاح.")
 # ─────────── قائمة الأوامر ───────────
 @client.on(events.NewMessage(pattern=r"^\.الاوامر$"))
 async def cmds(event):
