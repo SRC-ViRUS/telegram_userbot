@@ -46,7 +46,95 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         tmp = await client.download_media(media, file=tempfile.mktemp())
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
+# ╔════════════════════════════════════════════════════════════════╗
+# ║  Forwarder الصعب 🔥 – تحويل الخاص وردودك إلى مجموعتين تلقائياً ║
+# ║  © 2025 الصعب | Developer: الصعب | جميع الحقوق محفوظة | #الصعب ║
+# ╚════════════════════════════════════════════════════════════════╝
+#
+#  • ينشئ (مرة واحدة فقط) مجموعتين:
+#       1) «خاص الصعب»   ← كل رسائل الخاص
+#       2) «ردود الصعب»  ← أي رد على رسائلك في القروبات
+#  • يستخدم حساب حشو @rrcexexbot أثناء الإنشاء ثم يطرده فوراً.
+#  • يدعم كل أنواع الرسائل، يتجاهل البوتات، ويتفادى الحلقات.
+#
+#  🔹 الصق هذا المقطع بعد تعريف `client = TelegramClient(...)`
+# ----------------------------------------------------------------
 
+import asyncio
+from telethon import events, functions, errors
+
+# ── إعدادات ثابتة ───────────────────────────────────────────────
+_PLACEHOLDER   = "rrcexexbot"     # حساب يُضاف للحظة ويُطرَد
+_PRIV_TITLE    = "خاص الصعب"      # مجموعة رسائل الخاص
+_REPLY_TITLE   = "ردود الصعب"     # مجموعة الردود عليك
+# ────────────────────────────────────────────────────────────────
+
+# ░░ أداة: إنشاء مجموعة أو جلبها إن وُجِدت
+async def _ensure_group(title: str):
+    async for d in client.iter_dialogs():
+        if d.is_group and d.title == title:
+            return d.entity
+    chat = await client(functions.messages.CreateChatRequest(
+        users=[_PLACEHOLDER], title=title))
+    grp = chat.chats[0]
+    # طرد حساب الحشو بصمت
+    try:
+        await client(functions.messages.DeleteChatUserRequest(
+            grp.id, _PLACEHOLDER))
+    except errors.UserAdminInvalidError:
+        pass
+    return grp
+
+# ░░ إنشاء المجموعتين مرة واحدة عند الإقلاع
+async def _setup():
+    global _grp_priv, _grp_reply, _me
+    _grp_priv  = await _ensure_group(_PRIV_TITLE)
+    _grp_reply = await _ensure_group(_REPLY_TITLE)
+    _me        = (await client.get_me()).id
+client.loop.run_until_complete(_setup())
+
+# ░░ تحويل رسائل الخاص → «خاص الصعب»
+@client.on(events.NewMessage(incoming=True))
+async def _forward_private(e):
+    if e.is_group or e.chat_id == _grp_priv.id or e.sender.bot:
+        return
+    try:
+        await client.forward_messages(_grp_priv, e.message)
+    except errors.rpcerrorlist:
+        pass  # رسائل محمية أو خطأ عابر
+
+# ░░ تحويل الردود عليك في القروبات → «ردود الصعب»
+@client.on(events.NewMessage(incoming=True))
+async def _forward_replies(e):
+    if (not e.is_group or e.chat_id == _grp_reply.id or
+        e.sender.bot or not e.is_reply):
+        return
+    try:
+        replied = await e.get_reply_message()
+        if replied.sender_id != _me:
+            return                # ليس ردًا عليك
+    except:                       # رسالة قديمة جدًا أو محذوفة
+        return
+
+    # رابط الرسالة إن أمكن
+    link = ""
+    if getattr(e.chat, "username", None):
+        link = f"https://t.me/{e.chat.username}/{e.id}"
+    elif str(e.chat_id).startswith("-100"):
+        link = f"https://t.me/c/{str(e.chat_id)[4:]}/{e.id}"
+
+    header = (f"📨 **رد جديد من** "
+              f"[{e.sender.first_name}](tg://user?id={e.sender_id})")
+    if link:
+        header += f"\n🔗 [رابط]({link})"
+
+    await client.send_message(_grp_reply, header, link_preview=False)
+    try:
+        await client.forward_messages(_grp_reply, e.message)
+    except errors.rpcerrorlist:
+        pass
+
+# ═════════════ END: Forwarder الصعب 🔥 ═════════════
 # ─────────── الاسم المؤقت للحساب ───────────
 @client.on(events.NewMessage(pattern=r"^\.مؤقت$"))
 async def cmd_name_on(event):
