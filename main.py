@@ -373,13 +373,14 @@ async def stop_repeat(event):
     else:
         await qedit(event, "⚠️ لا يوجد تكرار فعال.")
 
-# mention_simple.py
+# ──────── كود منشن متطور ────────
+# المطور: الصعب © 2025
 
 import asyncio
 import random
 from telethon import events
 
-# قائمة الترحيبات (رسائلك كلها محفوظة)
+# قائمة رسائل الترحيب
 mention_messages = [
     "ﻣـسٱ۽ آࢦخـيࢪ يصـاك🫀🤍🍯.",
     "عـࢪفنـه ؏ـليـك؟ 🌚💗",
@@ -416,20 +417,21 @@ mention_messages = [
     "مـشتاق لعيونك. 🌝🍫.",
 ]
 
-# تحقق أن صاحب الجلسة هو الذي يرسل الأمر
+# تأكد أن صاحب الحساب هو من يستدعي الأمر
 async def is_owner(event, client):
     me = await client.get_me()
     return event.sender_id == me.id
 
-# أمر المنشن
+# الحدث الأساسي: أمر .منشن
 @events.register(events.NewMessage(pattern=r"^\.منشن$"))
 async def mention_all(event):
     if not await is_owner(event, event.client):
         return
-    if not event.is_group:
-        return await event.edit("❌ هذا الأمر مخصص فقط للقروبات.")
 
-    await event.edit("🔄 جاري جمع الأعضاء...")
+    if not event.is_group:
+        return await event.edit("❌ هذا الأمر يعمل داخل القروبات فقط.")
+
+    await event.edit("🔄 جاري جمع أعضاء المجموعة...")
 
     users = []
     async for user in event.client.iter_participants(event.chat_id):
@@ -437,16 +439,14 @@ async def mention_all(event):
             users.append(user)
 
     if not users:
-        return await event.edit("⚠️ لا يوجد أعضاء للمنشن.")
+        return await event.edit("⚠️ لم يتم العثور على أعضاء للمنشن.")
 
-    await event.edit(f"🚀 جاري منشن {len(users)} عضو...")
+    await event.edit(f"🚀 بدأ منشن {len(users)} عضو...")
 
     used_msgs = set()
     for user in users:
-        texts = [msg for msg in mention_messages if msg not in used_msgs]
-        if not texts:
-            used_msgs.clear()
-            texts = mention_messages[:]
+        # اختر رسالة ترحيب غير مكررة
+        texts = [m for m in mention_messages if m not in used_msgs] or mention_messages
         msg = random.choice(texts)
         used_msgs.add(msg)
 
@@ -454,12 +454,17 @@ async def mention_all(event):
         mention = f"<a href='tg://user?id={user.id}'>{name}</a>"
 
         try:
-            await event.client.send_message(event.chat_id, f"{msg} {mention}", parse_mode="html")
+            await event.client.send_message(
+                event.chat_id,
+                f"{msg} {mention}",
+                parse_mode="html"
+            )
             await asyncio.sleep(5)  # تأخير 5 ثواني بين كل رسالة
         except Exception as e:
-            print(f"⚠️ خطأ عند منشن {user.id}: {e}")
+            print(f"⚠️ خطأ أثناء المنشن: {e}")
 
-    await event.respond("✅ تم منشن الجميع بنجاح.")
+    await event.respond("✅ تم منشن كل الأعضاء بنجاح.")
+
 # ─────────── قائمة الأوامر ───────────
 @client.on(events.NewMessage(pattern=r"^\.الاوامر$"))
 async def cmds(event):
