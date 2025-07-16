@@ -553,7 +553,7 @@ async def cmds(event):
 <code>.الاوامر</code> – عرض قائمة الأوامر
 """
 
-    await event.edit(txt, parse_mode="html"
+    await event.edit(txt, parse_mode="html")
 # تشغيل البرنامج
 client.loop.run_until_complete(main())
 client.run_until_disconnected()
