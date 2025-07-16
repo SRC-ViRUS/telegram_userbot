@@ -555,5 +555,13 @@ async def cmds(event):
 
     await event.edit(txt, parse_mode="html")
 # تشغيل البرنامج
-client.loop.run_until_complete(main())
-client.run_until_disconnected()
+async def main():
+    print("تشغيل البوت…")
+    await client.start()
+    await ensure_groups()
+    print("✅ البوت يعمل الآن.")
+    await client.run_until_disconnected()
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
