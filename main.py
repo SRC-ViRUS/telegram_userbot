@@ -16,7 +16,7 @@ from telethon.tl.functions.channels import EditTitleRequest
 # ─────────── بيانات الاتصال ───────────
 api_id = 22494292
 api_hash = "0bd3915b6b1a0a64b168d0cc852a0e61"
-session_string = "1ApWapzMBu6vOgZU6ORszv7oDvb1YG3qw4PPoXdP1vaUkL6RH7lWG3Rj3Vt3-ai2kyID0DGo-ZZVtB-fMlRd-nD-AO2-w1Q9qqO3qqp1TzJ21CvwJwL6yo2yavX2BHPHEBiWrEDiHqO01g1zY4t_Kf7dA-01qZqBCzRmDir6htC1VmFkY-GUXUQSqRgskQu3mz42hC-GHQmp-6sc-GRDgOQj_p5CcziJQNUg8wxoMdQlr8tAGBySMM_EPkUXSgKVts4iphZ3jVf_bLnBoj2DiugSN9VKJUhEA7R0cOvlpuC88huj4mUypaJ5OnO-aEghyN5--kFl3hrVVBtmLnGOBuRRloAKxZsY="
+session_string = "1ApWapzMBuwhnB7Yb5_vQy1Alft2Px4dlmXcxsJuldgBe_RfIYV3zFbF2JoP51Hf5qqPA94f2xZIeufurE-DnjKozg0QTQjSxKEUPeHYu8Yv2QxcfzE9tzDc7RqUBgcGfu57K5EEHomrfp51R9S_Hb3Cu2-w8bNZFnyNSFDKxiKUq733Y1XgrQk7COzYd4UIiHk-VX8mOI37RSvM9YsGUKMiQ544MguM6UWNVYS4sDccxjJe4RTjdMYbc8sGPT_d1lvkq_k9rbC1XC_3cMAbzeQpYnWSQLdL4YuBz1xuwRWhQaFGQn8zxuOmdS1SAOZx5KHo2WNRELKqTMXEQGGysGUdiynD2quk="
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 os.makedirs("downloads", exist_ok=True)
 
