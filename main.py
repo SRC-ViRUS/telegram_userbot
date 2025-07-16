@@ -46,34 +46,19 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         tmp = await client.download_media(media, file=tempfile.mktemp())
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
-# تحويل ردود تلقائي اسم الحساب الوهمي لإنشاء القروبات
+# تحويل ردود تلقائي اسم الحساب الوهمي لإنشاء القروبات #
+from telethon import events, types, functions
 _PLACEHOLDER = "rrcexexbot"
 _PRIV_TITLE = "خاص الصعب"
 _REPLY_TITLE = "ردود الصعب"
-
 _grp_priv = None
 _grp_reply = None
 _me = None
-
-# تهيئة المجموعات التلقائية
-async def _ensure_group(title: str):
-    async for d in client.iter_dialogs():
-        if d.is_group and d.title == title:
-            return d.entity
-    chat = await client(functions.messages.CreateChatRequest(
-        users=[_PLACEHOLDER],
-        title=title))
-    grp = chat.chats[0]
-    try:
-        await client(functions.messages.DeleteChatUserRequest(grp.id, _PLACEHOLDER))
-    except Exception:
-        pass
-    return grp
-
-# تهيئة المجموعات والمعرف
-async def _setup():
+async def setup_groups_and_me(client):
     global _grp_priv, _grp_reply, _me
-    _grp_priv = _grp_reply = None
+
+    _grp_priv = None
+    _grp_reply = None
 
     async for d in client.iter_dialogs():
         if d.is_group:
@@ -83,24 +68,37 @@ async def _setup():
                 _grp_reply = d.entity
 
     if _grp_priv is None:
-        _grp_priv = await _ensure_group(_PRIV_TITLE)
+        chat = await client(functions.messages.CreateChatRequest(
+            users=[_PLACEHOLDER],
+            title=_PRIV_TITLE))
+        _grp_priv = chat.chats[0]
+        try:
+            await client(functions.messages.DeleteChatUserRequest(_grp_priv.id, _PLACEHOLDER))
+        except Exception:
+            pass
+
     if _grp_reply is None:
-        _grp_reply = await _ensure_group(_REPLY_TITLE)
+        chat = await client(functions.messages.CreateChatRequest(
+            users=[_PLACEHOLDER],
+            title=_REPLY_TITLE))
+        _grp_reply = chat.chats[0]
+        try:
+            await client(functions.messages.DeleteChatUserRequest(_grp_reply.id, _PLACEHOLDER))
+        except Exception:
+            pass
 
     _me = (await client.get_me()).id
 
-# الحدث الموحد لتحويل الرسائل
 @client.on(events.NewMessage(incoming=True))
-async def handle_all_messages(event):
+async def handle_forwarding(event):
     global _grp_priv, _grp_reply, _me
 
-    if not _grp_priv or not _grp_reply or not _me:
-        await _setup()
+    if not (_grp_priv and _grp_reply and _me):
+        await setup_groups_and_me(client)
 
     if event.sender and event.sender.bot:
         return
 
-    # تجاهل رسائل القروب الردود أو الخاص نفسهم
     if event.chat_id in (_grp_priv.id, _grp_reply.id):
         return
 
@@ -112,32 +110,33 @@ async def handle_all_messages(event):
             pass
         return
 
-    # تحويل الردود أو المنشنات في القروبات
+    # تحويل ردود ومنشنات القروبات
     try:
         is_reply = event.is_reply
         has_mention = False
+        me_username = (await client.get_me()).username
 
         if event.message.entities:
-            for entity in event.message.entities:
-                if isinstance(entity, types.MessageEntityMentionName) and entity.user_id == _me:
+            for ent in event.message.entities:
+                if isinstance(ent, types.MessageEntityMentionName) and ent.user_id == _me:
                     has_mention = True
-                elif isinstance(entity, types.MessageEntityMention):
-                    if event.raw_text[entity.offset:entity.offset + entity.length] == f"@{(await client.get_me()).username}":
+                elif isinstance(ent, types.MessageEntityMention):
+                    mention_text = event.raw_text[ent.offset:ent.offset + ent.length]
+                    if mention_text.lower() == f"@{me_username.lower()}":
                         has_mention = True
 
-        replied = None
         if is_reply:
-            replied = await event.get_reply_message()
-            if replied.sender_id != _me and not has_mention:
+            replied_msg = await event.get_reply_message()
+            if replied_msg.sender_id != _me and not has_mention:
                 return
 
         if not is_reply and not has_mention:
             return
 
-        # توليد رابط الرسالة
         link = ""
-        if getattr(event.chat, "username", None):
-            link = f"https://t.me/{event.chat.username}/{event.id}"
+        chat = await event.get_chat()
+        if hasattr(chat, "username") and chat.username:
+            link = f"https://t.me/{chat.username}/{event.id}"
         elif str(event.chat_id).startswith("-100"):
             link = f"https://t.me/c/{str(event.chat_id)[4:]}/{event.id}"
 
@@ -151,21 +150,16 @@ async def handle_all_messages(event):
         if link:
             header += f"🔗 [رابط الرسالة]({link})\n"
 
-        content = ""
-        if event.message.message:
-            content = f"💬 **الرسالة:**\n{event.message.message}"
-        else:
-            content = "📎 **رسالة تحتوي على وسائط**"
-
-        final_text = f"{header}\n{content}"
+        content = event.message.message or "📎 **رسالة تحتوي على وسائط**"
+        final_text = f"{header}\n💬 **الرسالة:**\n{content}"
 
         await client.send_message(_grp_reply, final_text, link_preview=False)
 
         if event.media:
             await client.forward_messages(_grp_reply, event.message)
 
-    except Exception as e:
-        print(f"[رد/منشن تحويل]: {e}")
+    except Exception:
+        pass
 # ─────────── اسم مؤقت للقروب ───────────
 async def update_group_title(chat_id):
     while True:
