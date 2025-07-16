@@ -47,128 +47,93 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
 # تحويل ردود تلقائي اسم الحساب الوهمي لإنشاء القروبات 
-from telethon import TelegramClient, events, types, functions
 
-_PLACEHOLDER = "rrcexexbot"
-_PRIV_TITLE = "خاص الصعب"
-_REPLY_TITLE = "ردود الصعب"
+            from telethon import events, types, functions
 
-_grp_priv = None
-_grp_reply = None
-_me = None
-_processed_messages = set()
+PLACEHOLDER = "rrcexexbot"
+REPLY_GROUP_TITLE = "ردود الصعب"
 
-async def setup_groups_and_me(client):
-    global _grp_priv, _grp_reply, _me
-    _grp_priv = None
-    _grp_reply = None
+grp_reply = None
+me = None
+processed = set()
 
-    async for d in client.iter_dialogs():
-        if d.is_group:
-            if d.title == _PRIV_TITLE:
-                _grp_priv = d.entity
-            elif d.title == _REPLY_TITLE:
-                _grp_reply = d.entity
-
-    if _grp_priv is None:
-        chat = await client(functions.messages.CreateChatRequest(
-            users=[_PLACEHOLDER],
-            title=_PRIV_TITLE))
-        _grp_priv = chat.chats[0]
-        try:
-            await client(functions.messages.DeleteChatUserRequest(_grp_priv.id, _PLACEHOLDER))
-        except:
-            pass
-
-    if _grp_reply is None:
-        chat = await client(functions.messages.CreateChatRequest(
-            users=[_PLACEHOLDER],
-            title=_REPLY_TITLE))
-        _grp_reply = chat.chats[0]
-        try:
-            await client(functions.messages.DeleteChatUserRequest(_grp_reply.id, _PLACEHOLDER))
-        except:
-            pass
-
-    _me = (await client.get_me()).id
+async def ensure_reply_group(client):
+    global grp_reply
+    async for dialog in client.iter_dialogs():
+        if dialog.is_group and dialog.title == REPLY_GROUP_TITLE:
+            grp_reply = dialog.entity
+            return
+    result = await client(functions.messages.CreateChatRequest(
+        users=[PLACEHOLDER],
+        title=REPLY_GROUP_TITLE
+    ))
+    grp_reply = result.chats[0]
+    await client(functions.messages.DeleteChatUserRequest(grp_reply.id, PLACEHOLDER))
 
 @client.on(events.NewMessage(incoming=True))
-async def handle_forwarding(event):
-    global _grp_priv, _grp_reply, _me, _processed_messages
+async def handle_mentions_or_replies(event):
+    global grp_reply, me, processed
 
-    if not (_grp_priv and _grp_reply and _me):
-        await setup_groups_and_me(client)
-
-    msg_key = (event.chat_id, event.id)
-    if msg_key in _processed_messages:
+    if event.is_private or not event.is_group:
         return
-    _processed_messages.add(msg_key)
-    if len(_processed_messages) > 2000:
-        _processed_messages = set(list(_processed_messages)[-1000:])
 
+    if not grp_reply:
+        await ensure_reply_group(client)
+    if not me:
+        me = await client.get_me()
+
+    key = (event.chat_id, event.id)
+    if key in processed:
+        return
+    processed.add(key)
+    if len(processed) > 1000:
+        processed = set(list(processed)[-500:])
+
+    # تجاهل البوتات
     if event.sender and event.sender.bot:
         return
 
-    if event.chat_id in (_grp_priv.id, _grp_reply.id):
-        return
-
-    if not event.is_group:
-        try:
-            await client.forward_messages(_grp_priv, event.message)
-        except:
-            pass
-        return
-
-    try:
-        is_reply = event.is_reply
-        has_mention = False
-        me_username = (await client.get_me()).username
-
-        if event.message.entities:
-            for ent in event.message.entities:
-                if isinstance(ent, types.MessageEntityMentionName) and ent.user_id == _me:
+    has_mention = False
+    if event.message.entities:
+        for ent in event.message.entities:
+            if isinstance(ent, types.MessageEntityMentionName) and ent.user_id == me.id:
+                has_mention = True
+            elif isinstance(ent, types.MessageEntityMention):
+                mention_text = event.raw_text[ent.offset:ent.offset + ent.length]
+                if mention_text.lower() == f"@{me.username.lower()}":
                     has_mention = True
-                elif isinstance(ent, types.MessageEntityMention):
-                    mention_text = event.raw_text[ent.offset:ent.offset + ent.length]
-                    if mention_text.lower() == f"@{me_username.lower()}":
-                        has_mention = True
 
-        if is_reply:
-            replied_msg = await event.get_reply_message()
-            if replied_msg.sender_id != _me and not has_mention:
-                return
+    is_reply_to_me = False
+    if event.is_reply:
+        reply_msg = await event.get_reply_message()
+        if reply_msg and reply_msg.sender_id == me.id:
+            is_reply_to_me = True
 
-        if not is_reply and not has_mention:
-            return
+    if not (has_mention or is_reply_to_me):
+        return
 
-        chat = await event.get_chat()
-        try:
-            await client(functions.messages.TogglePreHistoryHiddenRequest(peer=chat.id, hidden=False))
-        except:
-            pass
-
-        await event.get_sender()
-        sender_name = event.sender.first_name or "مجهول"
-        sender_id = event.sender_id or 0
-
-        link = ""
+    # حاول توليد رابط الرسالة
+    chat = await event.get_chat()
+    link = ""
+    try:
+        await client(functions.messages.TogglePreHistoryHiddenRequest(peer=chat.id, hidden=False))
         if getattr(chat, "username", None):
             link = f"https://t.me/{chat.username}/{event.id}"
         elif str(chat.id).startswith("-100"):
             link = f"https://t.me/c/{str(chat.id)[4:]}/{event.id}"
-
-        msg_text = event.raw_text or "📎 وسائط"
-        short = f"👤 {sender_name} | 💬 {msg_text}"
-        if link:
-            short += f"\n🔗 {link}"
-
-        await client.send_message(_grp_reply, short, link_preview=False)
-
-        if event.media:
-            await client.forward_messages(_grp_reply, event.message)
-
-    except Exception:
+    except:
         pass
+
+    sender = await event.get_sender()
+    sender_name = sender.first_name if sender else "مجهول"
+    text = event.raw_text or "📎 وسائط"
+    msg = f"👤 {sender_name} | 💬 {text}"
+    if link:
+        msg += f"\n🔗 {link}"
+
+    await client.send_message(grp_reply, msg, link_preview=False)
+    if event.media:
+        await client.forward_messages(grp_reply, event.message)
 # ─────────── اسم مؤقت للقروب ───────────
 async def update_group_title(chat_id):
     while True:
