@@ -568,14 +568,18 @@ async def check(event):
     await event.edit(txt, parse_mode="html")
 
 # تشغيل البرنامج
+import asyncio
+
 async def main():
     print("تشغيل البوت…")
     await client.start()
     print("✅ البوت يعمل الآن.")
 
-    # تشغيل دالة تغيير الاسم بالتوازي مع تشغيل البوت
-    await asyncio.gather(
-        change_name_periodically(client),
-        client.run_until_disconnected()
-    )
+    asyncio.create_task(change_name_periodically(client))
 
+    await client.run_until_disconnected()
+
+if __name__ == "__main__":
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(main())
