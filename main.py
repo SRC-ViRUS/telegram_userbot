@@ -46,40 +46,48 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         tmp = await client.download_media(media, file=tempfile.mktemp())
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
-# ─────────── اسم مؤقت للقروب ───────────
-async def update_group_title(chat_id):
+# ───────── اسم مؤقت  ───────────
+import asyncio
+import datetime
+import pytz
+from telethon import events
+from telethon.tl.functions.account import UpdateProfileRequest
+
+# حالة الاسم المؤقت
+auto_name = {"enabled": False}
+
+# دالة تحديث الاسم كل دقيقة حسب توقيت بغداد
+async def update_name():
     while True:
-        try:
-            await client(EditTitleRequest(chat_id, f"🕒 {baghdad_time()}"))
-        except Exception as e:
-            print(f"خطأ تغيير اسم القروب {chat_id}:", e)
+        if auto_name["enabled"]:
+            try:
+                now = datetime.datetime.now(pytz.timezone('Asia/Baghdad'))
+                hour = now.strftime("%I")
+                minute = now.strftime("%M")
+                name = f"{hour}:{minute}"
+                await client(UpdateProfileRequest(first_name=name))
+            except Exception as e:
+                print(f"خطأ أثناء تحديث الاسم: {e}")
         await asyncio.sleep(60)
 
-@client.on(events.NewMessage(pattern=r"^\.اسم مؤقت قروب$"))
-async def start_group_name_loop(event):
-    if not await is_owner(event) or not event.is_group:
-        return await qedit(event, "❌ فقط داخل القروبات.")
-    cid = event.chat_id
-    if cid in group_name_tasks:
-        return await qedit(event, "✅ مفعل مسبقًا.")
-    original_titles[cid] = (await event.get_chat()).title
-    task = asyncio.create_task(update_group_title(cid))
-    group_name_tasks[cid] = task
-    await qedit(event, "🕒 تم تفعيل الاسم المؤقت للقروب.")
+# أمر التشغيل: مؤقت
+@client.on(events.NewMessage(pattern=r'^مؤقت$'))
+async def تشغيل_المؤقت(event):
+    auto_name["enabled"] = True
+    msg = await event.respond("✅ تم تشغيل المؤقت.")
+    await asyncio.sleep(1)
+    await msg.delete()
 
-@client.on(events.NewMessage(pattern=r"^\.ايقاف اسم القروب$"))
-async def stop_group_name_loop(event):
-    if not await is_owner(event): return
-    cid = event.chat_id
-    task = group_name_tasks.pop(cid, None)
-    if task: task.cancel()
-    if cid in original_titles:
-        try:
-            await client(EditTitleRequest(cid, original_titles.pop(cid)))
-        except Exception as e:
-            print(f"خطأ إرجاع اسم القروب {cid}:", e)
-    await qedit(event, "🛑 تم إيقاف الاسم المؤقت للقروب.")
+# أمر الإيقاف: مؤقت ايقاف
+@client.on(events.NewMessage(pattern=r'^مؤقت ايقاف$'))
+async def ايقاف_المؤقت(event):
+    auto_name["enabled"] = False
+    msg = await event.respond("🛑 تم إيقاف المؤقت.")
+    await asyncio.sleep(1)
+    await msg.delete()
 
+# تأكد من تشغيل التحديث التلقائي عند تشغيل البوت (ضيفه في main)
+# asyncio.create_task(update_name())
 # ─────────── الكتم ───────────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def cmd_mute(event):
@@ -531,10 +539,10 @@ async def cmds(event):
 ↳ عرض حالة المنشن (مفعل ✅ / معطل 🛑) 
 
 <code>.مؤقت توقف</code> – إيقاف الاسم المؤقت للحساب
+🕒 أوامر الاسم المؤقت:
 
-<code>.اسم مؤقت قروب</code> – تفعيل اسم الوقت للقروب/القناة
-<code>.ايقاف اسم القروب</code> – إيقاف الاسم المؤقت للقروب
-
+• مؤقت – تشغيل تغيير الاسم كل دقيقة حسب وقت بغداد (12 ساعة).
+• مؤقت ايقاف – إيقاف تحديث الاسم المؤقت.
 <code>.كتم</code> (رد) – كتم
 <code>.الغاء الكتم</code> (رد) – فك كتم
 <code>.قائمة الكتم</code> – عرض الكتم
