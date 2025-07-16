@@ -47,7 +47,7 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
 # تحويل ردود تلقائي اسم الحساب الوهمي لإنشاء القروبات 
-  from telethon import TelegramClient, events, types, functions
+from telethon import TelegramClient, events, types, functions
 
 _PLACEHOLDER = "rrcexexbot"
 _PRIV_TITLE = "خاص الصعب"
