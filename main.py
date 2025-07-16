@@ -58,6 +58,8 @@ _grp_priv = None
 _grp_reply = None
 _me = None
 
+_processed_message_ids = set()  # لتخزين معرفات الرسائل المعالجة
+
 async def setup_groups_and_me(client):
     global _grp_priv, _grp_reply, _me
 
@@ -96,14 +98,25 @@ async def setup_groups_and_me(client):
 
 @client.on(events.NewMessage(incoming=True))
 async def handle_forwarding(event):
-    global _grp_priv, _grp_reply, _me
+    global _grp_priv, _grp_reply, _me, _processed_message_ids
 
     if not (_grp_priv and _grp_reply and _me):
         await setup_groups_and_me(client)
 
+    # منع التكرار حسب معرف الرسالة
+    if event.id in _processed_message_ids:
+        return
+    _processed_message_ids.add(event.id)
+
+    # نظف مجموعة معرفات الرسائل كل فترة (مثلاً 1000 رسالة للحفاظ على الذاكرة)
+    if len(_processed_message_ids) > 1000:
+        _processed_message_ids = set(list(_processed_message_ids)[-500:])
+
+    # تجاهل رسائل البوتات
     if event.sender and event.sender.bot:
         return
 
+    # تجاهل الرسائل التي في مجموعاتنا الخاصة بالتحويل
     if event.chat_id in (_grp_priv.id, _grp_reply.id):
         return
 
