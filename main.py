@@ -554,10 +554,18 @@ async def cmds(event):
 """
 
     await event.edit(txt, parse_mode="html")
+@client.on(events.NewMessage(pattern=r"\.فحص"))
+async def check(event):
+    txt = "✅ البوت يعمل"
+    await event.edit(txt, parse_mode="html")
+
 # تشغيل البرنامج
 async def main():
     print("تشغيل البوت…")
     await client.start()
-    # await ensure_groups()  <-- احذف أو علِّق هذا السطر
     print("✅ البوت يعمل الآن.")
     await client.run_until_disconnected()
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
