@@ -46,93 +46,6 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         tmp = await client.download_media(media, file=tempfile.mktemp())
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
-from telethon import TelegramClient, events, types, functions
-            from telethon import events, types, functions
-
-PLACEHOLDER = "rrcexexbot"
-REPLY_GROUP_TITLE = "ردود الصعب"
-
-grp_reply = None
-me = None
-processed = set()
-
-async def ensure_reply_group(client):
-    global grp_reply
-    async for dialog in client.iter_dialogs():
-        if dialog.is_group and dialog.title == REPLY_GROUP_TITLE:
-            grp_reply = dialog.entity
-            return
-    result = await client(functions.messages.CreateChatRequest(
-        users=[PLACEHOLDER],
-        title=REPLY_GROUP_TITLE
-    ))
-    grp_reply = result.chats[0]
-    await client(functions.messages.DeleteChatUserRequest(grp_reply.id, PLACEHOLDER))
-
-@client.on(events.NewMessage(incoming=True))
-async def handle_mentions_or_replies(event):
-    global grp_reply, me, processed
-
-    if event.is_private or not event.is_group:
-        return
-
-    if not grp_reply:
-        await ensure_reply_group(client)
-    if not me:
-        me = await client.get_me()
-
-    key = (event.chat_id, event.id)
-    if key in processed:
-        return
-    processed.add(key)
-    if len(processed) > 1000:
-        processed = set(list(processed)[-500:])
-
-    # تجاهل البوتات
-    if event.sender and event.sender.bot:
-        return
-
-    has_mention = False
-    if event.message.entities:
-        for ent in event.message.entities:
-            if isinstance(ent, types.MessageEntityMentionName) and ent.user_id == me.id:
-                has_mention = True
-            elif isinstance(ent, types.MessageEntityMention):
-                mention_text = event.raw_text[ent.offset:ent.offset + ent.length]
-                if mention_text.lower() == f"@{me.username.lower()}":
-                    has_mention = True
-
-    is_reply_to_me = False
-    if event.is_reply:
-        reply_msg = await event.get_reply_message()
-        if reply_msg and reply_msg.sender_id == me.id:
-            is_reply_to_me = True
-
-    if not (has_mention or is_reply_to_me):
-        return
-
-    # حاول توليد رابط الرسالة
-    chat = await event.get_chat()
-    link = ""
-    try:
-        await client(functions.messages.TogglePreHistoryHiddenRequest(peer=chat.id, hidden=False))
-        if getattr(chat, "username", None):
-            link = f"https://t.me/{chat.username}/{event.id}"
-        elif str(chat.id).startswith("-100"):
-            link = f"https://t.me/c/{str(chat.id)[4:]}/{event.id}"
-    except:
-        pass
-
-    sender = await event.get_sender()
-    sender_name = sender.first_name if sender else "مجهول"
-    text = event.raw_text or "📎 وسائط"
-    msg = f"👤 {sender_name} | 💬 {text}"
-    if link:
-        msg += f"\n🔗 {link}"
-
-    await client.send_message(grp_reply, msg, link_preview=False)
-    if event.media:
-        await client.forward_messages(grp_reply, event.message)
 # ─────────── اسم مؤقت للقروب ───────────
 async def update_group_title(chat_id):
     while True:
@@ -640,30 +553,7 @@ async def cmds(event):
 <code>.الاوامر</code> – عرض قائمة الأوامر
 """
 
-    await event.edit(txt, parse_mode="html")
-# تعريف دالة إنشاء المجموعات وتسميتها _setup
-async def _setup():
-    global _grp_priv, _grp_reply, _me
-    _grp_priv = None
-    _grp_reply = None
-    async for d in client.iter_dialogs():
-        if d.is_group:
-            if d.title == _PRIV_TITLE:
-                _grp_priv = d.entity
-            elif d.title == _REPLY_TITLE:
-                _grp_reply = d.entity
-    if _grp_priv is None:
-        _grp_priv = await _ensure_group(_PRIV_TITLE)
-    if _grp_reply is None:
-        _grp_reply = await _ensure_group(_REPLY_TITLE)
-    _me = (await client.get_me()).id
-
-# دالة البداية
-async def main():
-    await client.start()
-    await _setup()  # استدعاء الدالة الصحيحة لإنشاء المجموعات
-    print("✅ تم تشغيل البوت والمجموعات التلقائية.")
-
+    await event.edit(txt, parse_mode="html"
 # تشغيل البرنامج
 client.loop.run_until_complete(main())
 client.run_until_disconnected()
