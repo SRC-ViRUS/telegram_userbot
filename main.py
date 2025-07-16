@@ -46,18 +46,16 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         tmp = await client.download_media(media, file=tempfile.mktemp())
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
-# ╔════════════════════════════════════════╗
-# ║  Forwarder الصعب 🔥 – تحويل رسائل الخاص والردود تلقائياً ║
-# ╚════════════════════════════════════════╝
-
-_PLACEHOLDER = "rrcexexbot"     # حساب الحشو
-_PRIV_TITLE = "خاص الصعب"      # اسم مجموعة رسائل الخاص
-_REPLY_TITLE = "ردود الصعب"    # اسم مجموعة الردود
+# تحويل ردود تلقائي اسم الحساب الوهمي لإنشاء القروبات
+_PLACEHOLDER = "rrcexexbot"
+_PRIV_TITLE = "خاص الصعب"
+_REPLY_TITLE = "ردود الصعب"
 
 _grp_priv = None
 _grp_reply = None
 _me = None
 
+# تهيئة المجموعات التلقائية
 async def _ensure_group(title: str):
     async for d in client.iter_dialogs():
         if d.is_group and d.title == title:
@@ -72,11 +70,10 @@ async def _ensure_group(title: str):
         pass
     return grp
 
+# تهيئة المجموعات والمعرف
 async def _setup():
     global _grp_priv, _grp_reply, _me
-
-    _grp_priv = None
-    _grp_reply = None
+    _grp_priv = _grp_reply = None
 
     async for d in client.iter_dialogs():
         if d.is_group:
@@ -92,80 +89,83 @@ async def _setup():
 
     _me = (await client.get_me()).id
 
+# الحدث الموحد لتحويل الرسائل
 @client.on(events.NewMessage(incoming=True))
-async def _forward_private(event):
-    if event.is_group or event.chat_id == (_grp_priv.id if _grp_priv else None) or (event.sender and event.sender.bot):
-        return
-    try:
-        await client.forward_messages(_grp_priv, event.message)
-    except Exception:
-        pass
+async def handle_all_messages(event):
+    global _grp_priv, _grp_reply, _me
 
-@client.on(events.NewMessage(incoming=True))
-async def _forward_replies(event):
-    if (not event.is_group or event.chat_id == (_grp_reply.id if _grp_reply else None)
-        or not event.sender or event.sender.bot or not event.is_reply):
+    if not _grp_priv or not _grp_reply or not _me:
+        await _setup()
+
+    if event.sender and event.sender.bot:
         return
+
+    # تجاهل رسائل القروب الردود أو الخاص نفسهم
+    if event.chat_id in (_grp_priv.id, _grp_reply.id):
+        return
+
+    # تحويل رسائل الخاص
+    if not event.is_group:
+        try:
+            await client.forward_messages(_grp_priv, event.message)
+        except Exception:
+            pass
+        return
+
+    # تحويل الردود أو المنشنات في القروبات
     try:
-        replied = await event.get_reply_message()
-        if replied.sender_id != _me:
+        is_reply = event.is_reply
+        has_mention = False
+
+        if event.message.entities:
+            for entity in event.message.entities:
+                if isinstance(entity, types.MessageEntityMentionName) and entity.user_id == _me:
+                    has_mention = True
+                elif isinstance(entity, types.MessageEntityMention):
+                    if event.raw_text[entity.offset:entity.offset + entity.length] == f"@{(await client.get_me()).username}":
+                        has_mention = True
+
+        replied = None
+        if is_reply:
+            replied = await event.get_reply_message()
+            if replied.sender_id != _me and not has_mention:
+                return
+
+        if not is_reply and not has_mention:
             return
-    except Exception:
-        return
 
-    link = ""
-    if getattr(event.chat, "username", None):
-        link = f"https://t.me/{event.chat.username}/{event.id}"
-    elif str(event.chat_id).startswith("-100"):
-        link = f"https://t.me/c/{str(event.chat_id)[4:]}/{event.id}"
+        # توليد رابط الرسالة
+        link = ""
+        if getattr(event.chat, "username", None):
+            link = f"https://t.me/{event.chat.username}/{event.id}"
+        elif str(event.chat_id).startswith("-100"):
+            link = f"https://t.me/c/{str(event.chat_id)[4:]}/{event.id}"
 
-    header = (f"📨 **رد جديد من** "
-              f"[{event.sender.first_name}](tg://user?id={event.sender_id})")
-    if link:
-        header += f"\n🔗 [رابط]({link})"
+        sender_name = event.sender.first_name if event.sender else "مجهول"
+        sender_id = event.sender_id if event.sender_id else 0
 
-    await client.send_message(_grp_reply, header, link_preview=False)
-    try:
-        await client.forward_messages(_grp_reply, event.message)
-    except Exception:
-        pass
-# ─────────── الاسم المؤقت للحساب ───────────
-@client.on(events.NewMessage(pattern=r"^\.مؤقت$"))
-async def cmd_name_on(event):
-    if not await is_owner(event): return
-    global name_task, prev_name
-    if name_task and not name_task.done():
-        return await qedit(event, "✅ الاسم المؤقت مفعل مسبقًا.")
+        header = (
+            f"📨 **رسالة من قروب**\n"
+            f"👤 [{sender_name}](tg://user?id={sender_id})\n"
+        )
+        if link:
+            header += f"🔗 [رابط الرسالة]({link})\n"
 
-    if not prev_name:
-        prev_name = (await client.get_me()).first_name or "حسابي"
+        content = ""
+        if event.message.message:
+            content = f"💬 **الرسالة:**\n{event.message.message}"
+        else:
+            content = "📎 **رسالة تحتوي على وسائط**"
 
-    async def update_name_loop():
-        while True:
-            try:
-                t = (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime('%I:%M')
-                await client(UpdateProfileRequest(first_name=t))
-            except Exception as e:
-                print("❌ خطأ تغيير الاسم:", e)
-            await asyncio.sleep(60)
+        final_text = f"{header}\n{content}"
 
-    name_task = asyncio.create_task(update_name_loop())
-    await qedit(event, "🕒 تم تفعيل الاسم المؤقت للحساب.")
+        await client.send_message(_grp_reply, final_text, link_preview=False)
 
-@client.on(events.NewMessage(pattern=r"^\.مؤقت توقف$"))
-async def cmd_name_off(event):
-    if not await is_owner(event): return
-    global name_task, prev_name
-    if name_task:
-        name_task.cancel(); name_task = None
-    else:
-        return await qedit(event, "⚠️ الاسم المؤقت غير مفعل.")
-    try:
-        await client(UpdateProfileRequest(first_name=prev_name))
-        await qedit(event, "🛑 تم إرجاع الاسم الأصلي.")
-    except Exception:
-        await qedit(event, "❌ فشل إرجاع الاسم.")
+        if event.media:
+            await client.forward_messages(_grp_reply, event.message)
 
+    except Exception as e:
+        print(f"[رد/منشن تحويل]: {e}")
 # ─────────── اسم مؤقت للقروب ───────────
 async def update_group_title(chat_id):
     while True:
