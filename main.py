@@ -85,7 +85,9 @@ async def ايقاف_المؤقت(event):
     msg = await event.respond("🛑 تم إيقاف المؤقت.")
     await asyncio.sleep(1)
     await msg.delete()
-
+async def update_name():
+    while True:
+        await asyncio.sleep(40)
 # تأكد من تشغيل التحديث التلقائي عند تشغيل البوت (ضيفه في main)
 # asyncio.create_task(update_name())
 # ─────────── الكتم ───────────
@@ -568,18 +570,29 @@ async def check(event):
     await event.edit(txt, parse_mode="html")
 
 # تشغيل البرنامج
-import asyncio
+from telethon import events
 
+@client.on(events.NewMessage(pattern=r"\.فحص"))
+async def check(event):
+    txt = "✅ البوت يعمل"
+    await event.edit(txt, parse_mode="html")
+
+# ← دالة تغيير الاسم لازم تكون موجودة قبل main()
+async def update_name():
+    while True:
+        # هنا تضيف كود تغيير الاسم حسب رغبتك
+        await asyncio.sleep(60)
+
+# تشغيل البرنامج
 async def main():
     print("تشغيل البوت…")
     await client.start()
     print("✅ البوت يعمل الآن.")
 
-    asyncio.create_task(change_name_periodically(client))
+    asyncio.create_task(update_name())  # ← شغل الاسم المؤقت هنا داخل main
 
     await client.run_until_disconnected()
 
 if __name__ == "__main__":
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(main())
+    import asyncio
+    asyncio.run(main())
