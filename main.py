@@ -558,10 +558,6 @@ async def cmds(event):
 async def main():
     print("تشغيل البوت…")
     await client.start()
-    await ensure_groups()
+    # await ensure_groups()  <-- احذف أو علِّق هذا السطر
     print("✅ البوت يعمل الآن.")
     await client.run_until_disconnected()
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
