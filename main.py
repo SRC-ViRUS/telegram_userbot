@@ -572,12 +572,10 @@ async def main():
     print("تشغيل البوت…")
     await client.start()
     print("✅ البوت يعمل الآن.")
-    
-    # استدعاء تغيير الاسم بشكل غير متزامن في الخلفية
-    asyncio.create_task(change_name_periodically(client))
-    
-    await client.run_until_disconnected()
 
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    # تشغيل دالة تغيير الاسم بالتوازي مع تشغيل البوت
+    await asyncio.gather(
+        change_name_periodically(client),
+        client.run_until_disconnected()
+    )
+
