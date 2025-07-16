@@ -46,14 +46,18 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         tmp = await client.download_media(media, file=tempfile.mktemp())
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
-# تحويل ردود تلقائي اسم الحساب الوهمي لإنشاء القروبات #
+# تحويل ردود تلقائي اسم الحساب الوهمي لإنشاء القروبات 
+
 from telethon import events, types, functions
+
 _PLACEHOLDER = "rrcexexbot"
 _PRIV_TITLE = "خاص الصعب"
 _REPLY_TITLE = "ردود الصعب"
+
 _grp_priv = None
 _grp_reply = None
 _me = None
+
 async def setup_groups_and_me(client):
     global _grp_priv, _grp_reply, _me
 
@@ -74,7 +78,7 @@ async def setup_groups_and_me(client):
         _grp_priv = chat.chats[0]
         try:
             await client(functions.messages.DeleteChatUserRequest(_grp_priv.id, _PLACEHOLDER))
-        except Exception:
+        except:
             pass
 
     if _grp_reply is None:
@@ -84,10 +88,11 @@ async def setup_groups_and_me(client):
         _grp_reply = chat.chats[0]
         try:
             await client(functions.messages.DeleteChatUserRequest(_grp_reply.id, _PLACEHOLDER))
-        except Exception:
+        except:
             pass
 
     _me = (await client.get_me()).id
+
 
 @client.on(events.NewMessage(incoming=True))
 async def handle_forwarding(event):
@@ -102,15 +107,13 @@ async def handle_forwarding(event):
     if event.chat_id in (_grp_priv.id, _grp_reply.id):
         return
 
-    # تحويل رسائل الخاص
     if not event.is_group:
         try:
             await client.forward_messages(_grp_priv, event.message)
-        except Exception:
+        except:
             pass
         return
 
-    # تحويل ردود ومنشنات القروبات
     try:
         is_reply = event.is_reply
         has_mention = False
@@ -133,27 +136,28 @@ async def handle_forwarding(event):
         if not is_reply and not has_mention:
             return
 
-        link = ""
         chat = await event.get_chat()
-        if hasattr(chat, "username") and chat.username:
+        try:
+            await client(functions.messages.TogglePreHistoryHiddenRequest(peer=chat.id, hidden=False))
+        except:
+            pass
+
+        await event.get_sender()
+        sender_name = event.sender.first_name or "مجهول"
+        sender_id = event.sender_id or 0
+
+        link = ""
+        if getattr(chat, "username", None):
             link = f"https://t.me/{chat.username}/{event.id}"
-        elif str(event.chat_id).startswith("-100"):
-            link = f"https://t.me/c/{str(event.chat_id)[4:]}/{event.id}"
+        elif str(chat.id).startswith("-100"):
+            link = f"https://t.me/c/{str(chat.id)[4:]}/{event.id}"
 
-        sender_name = event.sender.first_name if event.sender else "مجهول"
-        sender_id = event.sender_id if event.sender_id else 0
-
-        header = (
-            f"📨 **رسالة من قروب**\n"
-            f"👤 [{sender_name}](tg://user?id={sender_id})\n"
-        )
+        msg_text = event.raw_text or "📎 وسائط"
+        short = f"👤 {sender_name} | 💬 {msg_text}"
         if link:
-            header += f"🔗 [رابط الرسالة]({link})\n"
+            short += f"\n🔗 {link}"
 
-        content = event.message.message or "📎 **رسالة تحتوي على وسائط**"
-        final_text = f"{header}\n💬 **الرسالة:**\n{content}"
-
-        await client.send_message(_grp_reply, final_text, link_preview=False)
+        await client.send_message(_grp_reply, short, link_preview=False)
 
         if event.media:
             await client.forward_messages(_grp_reply, event.message)
