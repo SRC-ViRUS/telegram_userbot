@@ -47,8 +47,7 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
 # تحويل ردود تلقائي اسم الحساب الوهمي لإنشاء القروبات 
-
-from telethon import events, types, functions
+  from telethon import TelegramClient, events, types, functions
 
 _PLACEHOLDER = "rrcexexbot"
 _PRIV_TITLE = "خاص الصعب"
@@ -57,12 +56,10 @@ _REPLY_TITLE = "ردود الصعب"
 _grp_priv = None
 _grp_reply = None
 _me = None
-
-_processed_message_ids = set()  # لتخزين معرفات الرسائل المعالجة
+_processed_messages = set()
 
 async def setup_groups_and_me(client):
     global _grp_priv, _grp_reply, _me
-
     _grp_priv = None
     _grp_reply = None
 
@@ -95,28 +92,23 @@ async def setup_groups_and_me(client):
 
     _me = (await client.get_me()).id
 
-
 @client.on(events.NewMessage(incoming=True))
 async def handle_forwarding(event):
-    global _grp_priv, _grp_reply, _me, _processed_message_ids
+    global _grp_priv, _grp_reply, _me, _processed_messages
 
     if not (_grp_priv and _grp_reply and _me):
         await setup_groups_and_me(client)
 
-    # منع التكرار حسب معرف الرسالة
-    if event.id in _processed_message_ids:
+    msg_key = (event.chat_id, event.id)
+    if msg_key in _processed_messages:
         return
-    _processed_message_ids.add(event.id)
+    _processed_messages.add(msg_key)
+    if len(_processed_messages) > 2000:
+        _processed_messages = set(list(_processed_messages)[-1000:])
 
-    # نظف مجموعة معرفات الرسائل كل فترة (مثلاً 1000 رسالة للحفاظ على الذاكرة)
-    if len(_processed_message_ids) > 1000:
-        _processed_message_ids = set(list(_processed_message_ids)[-500:])
-
-    # تجاهل رسائل البوتات
     if event.sender and event.sender.bot:
         return
 
-    # تجاهل الرسائل التي في مجموعاتنا الخاصة بالتحويل
     if event.chat_id in (_grp_priv.id, _grp_reply.id):
         return
 
