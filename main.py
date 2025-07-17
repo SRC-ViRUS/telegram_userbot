@@ -48,67 +48,50 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         os.remove(tmp)
         #_______ازعاج ايموجي ________
 from telethon import events
+from collections import defaultdict
 
-# تخزين المستخدمين المطلوب إزعاجهم مع الإيموجي
-emoji_spam_targets = {}  # user_id: emoji
+# قاعدة بيانات بسيطة لحالة الإزعاج
+annoy_targets = defaultdict(str)  # chat_id: {user_id: emoji}
 
-# ✅ أمر تفعيل الإزعاج: .ازعاج 😂
-@client.on(events.NewMessage(pattern=r"^\.ازعاج (.+)$"))
-async def add_emoji_spam(event):
+@client.on(events.NewMessage(pattern=r'^\.ازعاج (.+)'))
+async def annoy_user(event):
     if not event.is_reply:
-        return await event.reply("❗الرجاء الرد على رسالة المستخدم لتفعيل الإزعاج.")
-
+        return await event.reply("↯ يجب الرد على رسالة المستخدم المستهدف.")
+    
     emoji = event.pattern_match.group(1).strip()
-    reply = await event.get_reply_message()
-    user_id = reply.sender_id
+    reply_msg = await event.get_reply_message()
+    user_id = reply_msg.sender_id
+    chat_id = event.chat_id
 
-    if user_id in emoji_spam_targets:
-        return await event.edit("❗هذا المستخدم مضاف مسبقاً.")
+    annoy_targets[chat_id, user_id] = emoji
+    await event.edit(f"✅ بدأ الإزعاج بـ {emoji}")
 
-    if len(emoji_spam_targets) >= 50:
-        return await event.edit("🚫 لا يمكنك إضافة أكثر من 50 مستخدم للإزعاج.")
-
-    emoji_spam_targets[user_id] = emoji
-    await event.edit(
-        f"✅ تم تفعيل الإزعاج على <a href='tg://user?id={user_id}'>هذا المستخدم</a> بالإيموجي {emoji}",
-        parse_mode='html'
-    )
-
-# ✅ أمر إلغاء الإزعاج: .لاتزعج
-@client.on(events.NewMessage(pattern=r"^\.لاتزعج$"))
-async def remove_emoji_spam(event):
+@client.on(events.NewMessage(pattern=r'^\.لاتزعج$'))
+async def stop_annoy(event):
     if not event.is_reply:
-        return await event.reply("❗الرجاء الرد على رسالة المستخدم لإيقاف الإزعاج.")
+        return await event.reply("↯ يجب الرد على رسالة المستخدم لإلغاء الإزعاج.")
+    
+    reply_msg = await event.get_reply_message()
+    user_id = reply_msg.sender_id
+    chat_id = event.chat_id
 
-    reply = await event.get_reply_message()
-    user_id = reply.sender_id
+    removed = annoy_targets.pop((chat_id, user_id), None)
+    if removed:
+        await event.edit("✅ تم إيقاف الإزعاج.")
+    else:
+        await event.edit("↯ لا يوجد إزعاج مفعّل على هذا المستخدم.")
 
-    if user_id not in emoji_spam_targets:
-        return await event.edit("ℹ️ هذا المستخدم غير موجود في قائمة الإزعاج.")
+@client.on(events.NewMessage())
+async def handle_annoy(event):
+    chat_id = event.chat_id
+    sender_id = event.sender_id
 
-    del emoji_spam_targets[user_id]
-    await event.edit(
-        f"🛑 تم حذف <a href='tg://user?id={user_id}'>هذا المستخدم</a> من الإزعاج.",
-        parse_mode='html'
-    )
-
-# ✅ التفاعل التلقائي مع رسائل المستخدمين المزعجين
-@client.on(events.NewMessage(incoming=True))
-async def auto_react_to_targets(event):
-    user_id = event.sender_id
-
-    if user_id in emoji_spam_targets:
-        emoji = emoji_spam_targets[user_id]
-
-        # لا نتفاعل مع رسائل القنوات أو البوتات
-        if event.is_channel:
-            return
-
+    emoji = annoy_targets.get((chat_id, sender_id))
+    if emoji:
         try:
             await event.react(emoji)
-            print(f"✅ تم التفاعل مع رسالة من {user_id} بـ {emoji}")
         except Exception as e:
-            print(f"❌ فشل التفاعل مع رسالة من {user_id}: {e}")
+            print(f"فشل التفاعل: {e}")
 # ───────── اسم مؤقت  ───────────
 
 # ─────────── الكتم ───────────
