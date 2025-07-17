@@ -47,10 +47,12 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
         #_______ازعاج ايموجي ________
-# ✅ تخزين الأشخاص المزعجين مع الإيموجي
+from telethon import events
+
+# تخزين المستخدمين المطلوب إزعاجهم مع الإيموجي
 emoji_spam_targets = {}  # user_id: emoji
 
-# ✅ أمر .ازعاج <ايموجي> (بالرد)
+# ✅ أمر تفعيل الإزعاج: .ازعاج 😂
 @client.on(events.NewMessage(pattern=r"^\.ازعاج (.+)$"))
 async def add_emoji_spam(event):
     if not event.is_reply:
@@ -61,10 +63,10 @@ async def add_emoji_spam(event):
     user_id = reply.sender_id
 
     if user_id in emoji_spam_targets:
-        return await event.edit("❗المستخدم مضاف مسبقًا.")
+        return await event.edit("❗هذا المستخدم مضاف مسبقاً.")
 
     if len(emoji_spam_targets) >= 50:
-        return await event.edit("🚫 لا يمكن إضافة أكثر من 50 مستخدمًا.")
+        return await event.edit("🚫 لا يمكنك إضافة أكثر من 50 مستخدم للإزعاج.")
 
     emoji_spam_targets[user_id] = emoji
     await event.edit(
@@ -72,7 +74,7 @@ async def add_emoji_spam(event):
         parse_mode='html'
     )
 
-# ✅ أمر .لاتزعج (لحذف شخص من الإزعاج - بالرد)
+# ✅ أمر إلغاء الإزعاج: .لاتزعج
 @client.on(events.NewMessage(pattern=r"^\.لاتزعج$"))
 async def remove_emoji_spam(event):
     if not event.is_reply:
@@ -82,23 +84,31 @@ async def remove_emoji_spam(event):
     user_id = reply.sender_id
 
     if user_id not in emoji_spam_targets:
-        return await event.edit("ℹ️ المستخدم غير موجود في قائمة الإزعاج.")
+        return await event.edit("ℹ️ هذا المستخدم غير موجود في قائمة الإزعاج.")
 
     del emoji_spam_targets[user_id]
     await event.edit(
-        f"🛑 تم إيقاف الإزعاج عن <a href='tg://user?id={user_id}'>هذا المستخدم</a>",
+        f"🛑 تم حذف <a href='tg://user?id={user_id}'>هذا المستخدم</a> من الإزعاج.",
         parse_mode='html'
     )
 
-# ✅ التفاعل التلقائي مع رسائل المستهدفين
+# ✅ التفاعل التلقائي مع رسائل المستخدمين المزعجين
 @client.on(events.NewMessage(incoming=True))
 async def auto_react_to_targets(event):
-    if event.sender_id in emoji_spam_targets:
-        emoji = emoji_spam_targets[event.sender_id]
+    user_id = event.sender_id
+
+    if user_id in emoji_spam_targets:
+        emoji = emoji_spam_targets[user_id]
+
+        # لا نتفاعل مع رسائل القنوات أو البوتات
+        if event.is_channel:
+            return
+
         try:
             await event.react(emoji)
+            print(f"✅ تم التفاعل مع رسالة من {user_id} بـ {emoji}")
         except Exception as e:
-            print(f"[خطأ التفاعل] {e}")
+            print(f"❌ فشل التفاعل مع رسالة من {user_id}: {e}")
 # ───────── اسم مؤقت  ───────────
 import asyncio
 import datetime
