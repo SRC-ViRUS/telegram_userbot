@@ -1,5 +1,5 @@
-pytz
-aiohttp
-Versions should comply with PEP440.
-# This line is parsed in setup.py:
-__version__ = '1.40.0'
+telethon==1.40.0
+aiohttp==3.9.5
+pyrogram==2.0.106
+tgcrypto==1.2.5
+pytz==2024.1
