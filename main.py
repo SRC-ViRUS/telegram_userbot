@@ -110,49 +110,7 @@ async def auto_react_to_targets(event):
         except Exception as e:
             print(f"❌ فشل التفاعل مع رسالة من {user_id}: {e}")
 # ───────── اسم مؤقت  ───────────
-import asyncio
-import datetime
-import pytz
-from telethon import events
-from telethon.tl.functions.account import UpdateProfileRequest
 
-# حالة الاسم المؤقت
-auto_name = {"enabled": False}
-
-# دالة تحديث الاسم كل دقيقة حسب توقيت بغداد
-async def update_name():
-    while True:
-        if auto_name["enabled"]:
-            try:
-                now = datetime.datetime.now(pytz.timezone('Asia/Baghdad'))
-                hour = now.strftime("%I")
-                minute = now.strftime("%M")
-                name = f"{hour}:{minute}"
-                await client(UpdateProfileRequest(first_name=name))
-            except Exception as e:
-                print(f"خطأ أثناء تحديث الاسم: {e}")
-        await asyncio.sleep(60)
-
-# أمر التشغيل: مؤقت
-@client.on(events.NewMessage(pattern=r'^مؤقت$'))
-async def تشغيل_المؤقت(event):
-    auto_name["enabled"] = True
-    msg = await event.respond("✅ تم تشغيل المؤقت.")
-    await asyncio.sleep(1)
-    await msg.delete()
-
-# أمر الإيقاف: مؤقت ايقاف
-@client.on(events.NewMessage(pattern=r'^مؤقت ايقاف$'))
-async def ايقاف_المؤقت(event):
-    auto_name["enabled"] = False
-    msg = await event.respond("🛑 تم إيقاف المؤقت.")
-    await asyncio.sleep(1)
-    await msg.delete()
-async def update_name():
-    while True:
-        await asyncio.sleep(40)
-# تأكد من تشغيل التحديث التلقائي عند تشغيل البوت (ضيفه في main)
-# asyncio.create_task(update_name())
 # ─────────── الكتم ───────────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def cmd_mute(event):
@@ -603,11 +561,6 @@ async def cmds(event):
 .منشن حالة
 ↳ عرض حالة المنشن (مفعل ✅ / معطل 🛑) 
 
-<code>.مؤقت توقف</code> – إيقاف الاسم المؤقت للحساب
-🕒 أوامر الاسم المؤقت:
-
-• مؤقت – تشغيل تغيير الاسم كل دقيقة حسب وقت بغداد (12 ساعة).
-• مؤقت ايقاف – إيقاف تحديث الاسم المؤقت.
 <code>.كتم</code> (رد) – كتم
 <code>.الغاء الكتم</code> (رد) – فك كتم
 <code>.قائمة الكتم</code> – عرض الكتم
