@@ -46,6 +46,59 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         tmp = await client.download_media(media, file=tempfile.mktemp())
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
+        #_______ازعاج ايموجي ________
+# ✅ تخزين الأشخاص المزعجين مع الإيموجي
+emoji_spam_targets = {}  # user_id: emoji
+
+# ✅ أمر .ازعاج <ايموجي> (بالرد)
+@client.on(events.NewMessage(pattern=r"^\.ازعاج (.+)$"))
+async def add_emoji_spam(event):
+    if not event.is_reply:
+        return await event.reply("❗الرجاء الرد على رسالة المستخدم لتفعيل الإزعاج.")
+
+    emoji = event.pattern_match.group(1).strip()
+    reply = await event.get_reply_message()
+    user_id = reply.sender_id
+
+    if user_id in emoji_spam_targets:
+        return await event.edit("❗المستخدم مضاف مسبقًا.")
+
+    if len(emoji_spam_targets) >= 50:
+        return await event.edit("🚫 لا يمكن إضافة أكثر من 50 مستخدمًا.")
+
+    emoji_spam_targets[user_id] = emoji
+    await event.edit(
+        f"✅ تم تفعيل الإزعاج على <a href='tg://user?id={user_id}'>هذا المستخدم</a> بالإيموجي {emoji}",
+        parse_mode='html'
+    )
+
+# ✅ أمر .لاتزعج (لحذف شخص من الإزعاج - بالرد)
+@client.on(events.NewMessage(pattern=r"^\.لاتزعج$"))
+async def remove_emoji_spam(event):
+    if not event.is_reply:
+        return await event.reply("❗الرجاء الرد على رسالة المستخدم لإيقاف الإزعاج.")
+
+    reply = await event.get_reply_message()
+    user_id = reply.sender_id
+
+    if user_id not in emoji_spam_targets:
+        return await event.edit("ℹ️ المستخدم غير موجود في قائمة الإزعاج.")
+
+    del emoji_spam_targets[user_id]
+    await event.edit(
+        f"🛑 تم إيقاف الإزعاج عن <a href='tg://user?id={user_id}'>هذا المستخدم</a>",
+        parse_mode='html'
+    )
+
+# ✅ التفاعل التلقائي مع رسائل المستهدفين
+@client.on(events.NewMessage(incoming=True))
+async def auto_react_to_targets(event):
+    if event.sender_id in emoji_spam_targets:
+        emoji = emoji_spam_targets[event.sender_id]
+        try:
+            await event.react(emoji)
+        except Exception as e:
+            print(f"[خطأ التفاعل] {e}")
 # ───────── اسم مؤقت  ───────────
 import asyncio
 import datetime
@@ -549,7 +602,9 @@ async def cmds(event):
 <code>.الغاء الكتم</code> (رد) – فك كتم
 <code>.قائمة الكتم</code> – عرض الكتم
 <code>.مسح الكتم</code> – مسح الكتم
-
+اوامر الازعاج:
+.ازعاج <ايموجي>  → رد على شخص لإزعاجه بالإيموجي.
+.لاتزعج         → رد على نفس الشخص لإيقاف الإزعاج.
 <code>.تقليد</code> (رد) – تفعيل التقليد
 <code>.ايقاف التقليد</code> – إيقاف التقليد
 
