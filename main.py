@@ -649,15 +649,16 @@ async def update_name():
         await asyncio.sleep(60)
 
 # تشغيل البرنامج
+import asyncio
+
 async def main():
     print("تشغيل البوت…")
     await client.start()
     print("✅ البوت يعمل الآن.")
 
-    asyncio.create_task(update_name())  # ← شغل الاسم المؤقت هنا داخل main
+    asyncio.create_task(update_name())  # شغل مهمة تحديث الاسم
 
     await client.run_until_disconnected()
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
