@@ -108,7 +108,13 @@ async def react_to_annoyed_users(event):
         except Exception:
             pass  # تجاهل الأخطاء المحتملة
 # ───────── اسم مؤقت  ───────────
-
+@client.on(events.NewMessage(pattern=r"\.تجربة"))
+async def test_react(event):
+    try:
+        await event.react("❤️")
+        await event.reply("تم التفاعل ❤️")
+    except Exception as e:
+        await event.reply(f"خطأ: {e}")
 # ─────────── الكتم ───────────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def cmd_mute(event):
