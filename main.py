@@ -52,12 +52,18 @@ import asyncio
 
 annoying_users = {}
 MAX_ANNoy = 50  # الحد الأقصى
+annoy_enabled = True  # تفعيل الإزعاج بشكل عام
+
+async def is_owner(event):
+    me = await client.get_me()
+    return event.sender_id == me.id
 
 @client.on(events.NewMessage(pattern=r"\.ازعاج (.+)"))
 async def enable_annoy(event):
+    if not await is_owner(event):
+        return await event.reply("❌ فقط صاحب البوت يمكنه استخدام هذا الأمر.")
     if not event.is_reply:
         return await event.edit("❗️ يرجى الرد على رسالة المستخدم لتفعيل الإزعاج.")
-    
     if len(annoying_users) >= MAX_ANNoy:
         return await event.edit(f"⚠️ تم الوصول للحد الأقصى ({MAX_ANNoy}) من المستخدمين المزعجين.")
     
@@ -75,6 +81,8 @@ async def enable_annoy(event):
 
 @client.on(events.NewMessage(pattern=r"\.لاتزعج"))
 async def disable_annoy(event):
+    if not await is_owner(event):
+        return await event.reply("❌ فقط صاحب البوت يمكنه استخدام هذا الأمر.")
     if not event.is_reply:
         return await event.edit("❗️ يرجى الرد على رسالة المستخدم لإيقاف الإزعاج.")
     
@@ -89,8 +97,30 @@ async def disable_annoy(event):
     await asyncio.sleep(1)
     await event.delete()
 
+@client.on(events.NewMessage(pattern=r"\.تشغيل_ازعاج"))
+async def enable_annoy_global(event):
+    if not await is_owner(event):
+        return await event.reply("❌ فقط صاحب البوت يمكنه استخدام هذا الأمر.")
+    global annoy_enabled
+    annoy_enabled = True
+    await event.edit("✅ تم تفعيل الإزعاج بشكل عام.")
+    await asyncio.sleep(1)
+    await event.delete()
+
+@client.on(events.NewMessage(pattern=r"\.ايقاف_ازعاج"))
+async def disable_annoy_global(event):
+    if not await is_owner(event):
+        return await event.reply("❌ فقط صاحب البوت يمكنه استخدام هذا الأمر.")
+    global annoy_enabled
+    annoy_enabled = False
+    await event.edit("🛑 تم إيقاف الإزعاج بشكل عام.")
+    await asyncio.sleep(1)
+    await event.delete()
+
 @client.on(events.NewMessage(incoming=True))
 async def auto_react(event):
+    if not annoy_enabled:
+        return
     user_id = event.sender_id
     if user_id in annoying_users:
         emoji = annoying_users[user_id]
