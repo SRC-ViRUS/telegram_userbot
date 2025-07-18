@@ -48,61 +48,76 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         os.remove(tmp)
         #_______ازعاج ايموجي ________
 from telethon import events
+from telethon.tl.functions.messages import SendReactionRequest
 import asyncio
 
-# قاعدة بيانات مؤقتة للإزعاج
 annoying_users = {}
+MAX_ANNoy = 10000
 
-# أمر تفعيل الإزعاج على مستخدم
+# تفعيل الإزعاج
 @client.on(events.NewMessage(pattern=r"\.ازعاج (.+)"))
 async def start_annoy(event):
     if not event.is_reply:
         return await event.reply("❗️يجب الرد على رسالة المستخدم لتفعيل الإزعاج.")
+
+    if len(annoying_users) >= MAX_ANNoy:
+        return await event.edit(f"⚠️ تم الوصول للحد الأقصى ({MAX_ANNoy}) للمستخدمين المزعجين.")
     
     reply = await event.get_reply_message()
     user_id = reply.sender_id
     emoji = event.pattern_match.group(1)
 
-    annoying_users[user_id] = emoji
-    await event.edit(f"✅ تم تفعيل الإزعاج على [{user_id}]\nبإيموجي: {emoji}")
+    if user_id in annoying_users:
+        await event.edit(f"⚠️ المستخدم مفعّل عليه الإزعاج سابقاً.")
+    else:
+        annoying_users[user_id] = emoji
+        await event.edit(f"✅ تم تفعيل الإزعاج على المستخدم [{user_id}] بالإيموجي: {emoji}")
+
     await asyncio.sleep(1)
     await event.delete()
 
-# أمر إيقاف الإزعاج عن مستخدم
+# إيقاف الإزعاج عن مستخدم
 @client.on(events.NewMessage(pattern=r"\.لاتزعج"))
 async def stop_annoy(event):
     if not event.is_reply:
         return await event.reply("❗️يجب الرد على رسالة المستخدم لإيقاف الإزعاج.")
-
+    
     reply = await event.get_reply_message()
     user_id = reply.sender_id
 
     if user_id in annoying_users:
         annoying_users.pop(user_id)
-        await event.edit(f"🛑 تم إيقاف الإزعاج عن [{user_id}]")
+        await event.edit(f"🛑 تم إيقاف الإزعاج عن المستخدم [{user_id}]")
     else:
         await event.edit("🚫 هذا المستخدم غير مفعّل عليه الإزعاج.")
+    
     await asyncio.sleep(1)
     await event.delete()
 
-# تنفيذ التفاعل مع رسائل المستخدمين المزعجين
+# أمر حذف كل المزعجين دفعة واحدة
+@client.on(events.NewMessage(pattern=r"\.مسح_المزعجين"))
+async def clear_annoying(event):
+    annoying_users.clear()
+    await event.edit("✅ تم حذف جميع المستخدمين المزعجين من القائمة.")
+    await asyncio.sleep(1)
+    await event.delete()
+
+# التفاعل التلقائي مع رسائل المستخدمين المزعجين
 @client.on(events.NewMessage)
 async def react_to_annoyed(event):
     user_id = event.sender_id
     if user_id in annoying_users:
+        emoji = annoying_users[user_id]
         try:
-            emoji = annoying_users[user_id]
-            await event.react(emoji)
+            await client(SendReactionRequest(
+                peer=event.chat_id,
+                msg_id=event.id,
+                reaction=[emoji]
+            ))
         except Exception as e:
-            print(f"[!] خطأ في التفاعل مع رسالة {user_id}: {e}")
+            print(f"❌ فشل في التفاعل مع رسالة {user_id}: {e}")
 # ───────── اسم مؤقت  ───────────
-@client.on(events.NewMessage(pattern=r"\.تجربة"))
-async def test_react(event):
-    try:
-        await event.react("❤️")
-        await event.reply("تم التفاعل ❤️")
-    except Exception as e:
-        await event.reply(f"خطأ: {e}")
+
 # ─────────── الكتم ───────────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def cmd_mute(event):
