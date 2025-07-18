@@ -47,11 +47,13 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
         #_______ازعاج ايموجي ________
-from telethon import events, functions, types
+from telethon import events
+import asyncio
 
-# قاعدة بيانات مؤقتة
+# قاعدة بيانات مؤقتة للإزعاج
 annoying_users = {}
 
+# أمر تفعيل الإزعاج على مستخدم
 @client.on(events.NewMessage(pattern=r"\.ازعاج (.+)"))
 async def start_annoy(event):
     if not event.is_reply:
@@ -66,6 +68,7 @@ async def start_annoy(event):
     await asyncio.sleep(1)
     await event.delete()
 
+# أمر إيقاف الإزعاج عن مستخدم
 @client.on(events.NewMessage(pattern=r"\.لاتزعج"))
 async def stop_annoy(event):
     if not event.is_reply:
@@ -82,6 +85,7 @@ async def stop_annoy(event):
     await asyncio.sleep(1)
     await event.delete()
 
+# تنفيذ التفاعل مع رسائل المستخدمين المزعجين
 @client.on(events.NewMessage)
 async def react_to_annoyed(event):
     user_id = event.sender_id
@@ -90,7 +94,7 @@ async def react_to_annoyed(event):
             emoji = annoying_users[user_id]
             await event.react(emoji)
         except Exception as e:
-            print(f"[!] خطأ في التفاعل: {e}")  # لا يهم السبب المحتمل
+            print(f"[!] خطأ في التفاعل مع رسالة {user_id}: {e}")
 # ───────── اسم مؤقت  ───────────
 @client.on(events.NewMessage(pattern=r"\.تجربة"))
 async def test_react(event):
