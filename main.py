@@ -598,7 +598,7 @@ async def main():
     await client.start()
     print("✅ البوت يعمل الآن.")
 
-    asyncio.create_task(update_name())  # شغل مهمة تحديث الاسم
+    # لم نعد نشغل update_name()
 
     await client.run_until_disconnected()
 
