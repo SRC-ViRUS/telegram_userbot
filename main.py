@@ -90,7 +90,7 @@ async def react_to_annoyed(event):
             emoji = annoying_users[user_id]
             await event.react(emoji)
         except Exception as e:
-            print(f"[!] خطأ في التفاعل: {e}")تجاهل الأخطاء المحتملة
+            print(f"[!] خطأ في التفاعل: {e}")  # لا يهم السبب المحتمل
 # ───────── اسم مؤقت  ───────────
 @client.on(events.NewMessage(pattern=r"\.تجربة"))
 async def test_react(event):
