@@ -79,7 +79,6 @@ async def activate_sleep(event):
     try:
         await event.edit("🟡 تم تفعيل وضع السليب.")
     except:
-        # في حال الرسالة ما يمكن تعديلها، فقط تجاهل
         pass
 
 @client.on(events.NewMessage(pattern=r'^\.سكون(?: (.+))?$'))
@@ -133,7 +132,6 @@ async def handle_incoming(event):
         await asyncio.sleep(4)
         await event.delete()
     except:
-        # تجاهل الأخطاء مثلا إذا الرسالة لا يمكن تعديلها أو حذفها
         pass
 
 @client.on(events.NewMessage(outgoing=True))
@@ -141,6 +139,11 @@ async def auto_cancel_sleep(event):
     global sleep_mode, sleep_reason, sleep_start, custom_reply, handled_messages
 
     if not sleep_mode:
+        return
+
+    # تجاهل أوامر التفعيل (.سكون و .سليب) حتى لا يتم الإلغاء مباشرة عند إرسالها
+    text = event.raw_text or ""
+    if text.startswith(".سكون") or text.startswith(".سليب"):
         return
 
     # حساب المدة
