@@ -47,87 +47,98 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
         #_______ازعاج ايموجي ________
+import datetime
 from telethon import events
-import asyncio
 
-annoying_users = {}
-MAX_ANNoy = 50  # الحد الأقصى
-annoy_enabled = True  # تفعيل الإزعاج بشكل عام
+# متغيرات السكون
+sleep_mode = False
+sleep_reason = None
+sleep_start = None
+custom_reply = None
+reply_msg = None
 
-async def is_owner(event):
-    me = await client.get_me()
-    return event.sender_id == me.id
+# ✅ أمر تفعيل السكون فقط لأمر صريح .سليب
+@client.on(events.NewMessage(pattern=r'^\.سليب(?: (.+?))?(?: -- (.+))?$', outgoing=True))
+async def activate_sleep(event):
+    global sleep_mode, sleep_reason, sleep_start, custom_reply, reply_msg
 
-@client.on(events.NewMessage(pattern=r"\.ازعاج (.+)"))
-async def enable_annoy(event):
-    if not await is_owner(event):
-        return await event.reply("❌ فقط صاحب البوت يمكنه استخدام هذا الأمر.")
-    if not event.is_reply:
-        return await event.edit("❗️ يرجى الرد على رسالة المستخدم لتفعيل الإزعاج.")
-    if len(annoying_users) >= MAX_ANNoy:
-        return await event.edit(f"⚠️ تم الوصول للحد الأقصى ({MAX_ANNoy}) من المستخدمين المزعجين.")
-    
-    reply = await event.get_reply_message()
-    user_id = reply.sender_id
-    emoji = event.pattern_match.group(1).strip()
-
-    if user_id in annoying_users:
-        return await event.edit("⚠️ المستخدم مفعّل عليه الإزعاج سابقاً.")
-
-    annoying_users[user_id] = emoji
-    await event.edit(f"✅ تم تفعيل الإزعاج على المستخدم `{user_id}` مع الإيموجي {emoji}")
-    await asyncio.sleep(1)
-    await event.delete()
-
-@client.on(events.NewMessage(pattern=r"\.لاتزعج"))
-async def disable_annoy(event):
-    if not await is_owner(event):
-        return await event.reply("❌ فقط صاحب البوت يمكنه استخدام هذا الأمر.")
-    if not event.is_reply:
-        return await event.edit("❗️ يرجى الرد على رسالة المستخدم لإيقاف الإزعاج.")
-    
-    reply = await event.get_reply_message()
-    user_id = reply.sender_id
-
-    if user_id in annoying_users:
-        annoying_users.pop(user_id)
-        await event.edit(f"🛑 تم إيقاف الإزعاج عن المستخدم `{user_id}`")
-    else:
-        await event.edit("🚫 هذا المستخدم غير مفعّل عليه الإزعاج.")
-    await asyncio.sleep(1)
-    await event.delete()
-
-@client.on(events.NewMessage(pattern=r"\.تشغيل_ازعاج"))
-async def enable_annoy_global(event):
-    if not await is_owner(event):
-        return await event.reply("❌ فقط صاحب البوت يمكنه استخدام هذا الأمر.")
-    global annoy_enabled
-    annoy_enabled = True
-    await event.edit("✅ تم تفعيل الإزعاج بشكل عام.")
-    await asyncio.sleep(1)
-    await event.delete()
-
-@client.on(events.NewMessage(pattern=r"\.ايقاف_ازعاج"))
-async def disable_annoy_global(event):
-    if not await is_owner(event):
-        return await event.reply("❌ فقط صاحب البوت يمكنه استخدام هذا الأمر.")
-    global annoy_enabled
-    annoy_enabled = False
-    await event.edit("🛑 تم إيقاف الإزعاج بشكل عام.")
-    await asyncio.sleep(1)
-    await event.delete()
-
-@client.on(events.NewMessage(incoming=True))
-async def auto_react(event):
-    if not annoy_enabled:
+    if sleep_mode:
+        await event.reply("⚠️ وضع السكون مفعل مسبقاً.")
         return
-    user_id = event.sender_id
-    if user_id in annoying_users:
-        emoji = annoying_users[user_id]
+
+    sleep_mode = True
+    sleep_start = datetime.datetime.now()
+    sleep_reason = event.pattern_match.group(1)
+    custom_reply = event.pattern_match.group(2)
+
+    txt = "🛌 <b>تم تفعيل وضع السكون.</b>\n"
+    if sleep_reason:
+        txt += f"📌 <b>السبب:</b> {sleep_reason}\n"
+    txt += "⏱️ سيتم الرد تلقائيًا على من يراسلك."
+
+    try:
+        reply_msg = await event.reply(txt, parse_mode="html")
+        await event.delete()
+    except:
+        pass
+
+# ✅ إلغاء السكون تلقائياً عند أول رسالة *عادية* صادرة (بدون أن تكون .سليب)
+@client.on(events.NewMessage(outgoing=True))
+async def deactivate_sleep(event):
+    global sleep_mode, sleep_reason, sleep_start, custom_reply, reply_msg
+
+    if sleep_mode and not event.raw_text.startswith(".سليب"):
+        sleep_mode = False
+        sleep_reason = None
+        sleep_start = None
+        custom_reply = None
+
         try:
-            await event.react(emoji)
-        except Exception as e:
-            print(f"⚠️ خطأ في التفاعل مع {user_id}: {e}")
+            if reply_msg:
+                await reply_msg.delete()
+                reply_msg = None
+        except:
+            pass
+
+# ✅ الرد التلقائي للرسائل الواردة أثناء السكون
+@client.on(events.NewMessage(incoming=True))
+async def reply_if_sleeping(event):
+    if sleep_mode and not event.out:
+        elapsed = datetime.datetime.now() - sleep_start
+        mins = int(elapsed.total_seconds() // 60)
+        h, m = divmod(mins, 60)
+        time_away = f"{h} ساعة و {m} دقيقة" if h else f"{m} دقيقة"
+
+        txt = f"🛌 <b>الحساب غير نشط حالياً</b>\n"
+        if sleep_reason:
+            txt += f"📌 <b>السبب:</b> {sleep_reason}\n"
+        txt += f"⏱️ <b>آخر ظهور:</b> منذ {time_away}"
+        if custom_reply:
+            txt += f"\n\n{custom_reply}"
+
+        try:
+            await event.reply(txt, parse_mode="html")
+        except:
+            pass
+
+# ✅ عرض حالة السكون
+@client.on(events.NewMessage(pattern=r'^\.حالة_السكون$', outgoing=True))
+async def show_sleep_status(event):
+    if sleep_mode:
+        elapsed = datetime.datetime.now() - sleep_start
+        mins = int(elapsed.total_seconds() // 60)
+        h, m = divmod(mins, 60)
+        time_away = f"{h} ساعة و {m} دقيقة" if h else f"{m} دقيقة"
+
+        msg = f"""🛌 <b>السكون مفعل</b>
+📌 <b>السبب:</b> {sleep_reason or 'غير محدد'}
+⏱️ <b>منذ:</b> {time_away}"""
+        if custom_reply:
+            msg += f"\n📝 <b>الرد المخصص:</b>\n{custom_reply}"
+
+        await event.reply(msg, parse_mode="html")
+    else:
+        await event.reply("✅ لست في وضع السكون حالياً.", parse_mode="html")
 # ───────── اسم مؤقت  ───────────
 from telethon import events, Button
 from datetime import datetime
