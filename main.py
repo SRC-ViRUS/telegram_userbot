@@ -47,10 +47,11 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
         #_______ازعاج ايموجي ________
-from telethon import TelegramClient, events
+    from telethon import TelegramClient, events
 import asyncio, datetime
 
-# client = TelegramClient("session_name", api_id, api_hash) ← تأكد معرفه قبل هذا الكود
+# تأكد من تعريف client قبل استخدام الكود:
+# client = TelegramClient("session_name", api_id, api_hash)
 
 sleep_mode = False
 sleep_reason = ""
@@ -120,9 +121,13 @@ async def handle_incoming(event):
 
     if not sleep_mode:
         return
-    if await is_owner(event) or event.is_channel:
+    if await is_owner(event):
         return
-    if event.id in handled_messages:
+    if event.is_group or event.is_channel:
+        return
+
+    key = (event.chat_id, event.id)
+    if key in handled_messages:
         return
 
     if custom_reply:
@@ -138,7 +143,7 @@ async def handle_incoming(event):
 
     try:
         await event.reply(msg)
-        handled_messages.add(event.id)
+        handled_messages.add(key)
         await asyncio.sleep(4)
         await event.delete()
     except:
@@ -167,7 +172,6 @@ async def auto_cancel_sleep(event):
     except:
         pass
 
-    # إلغاء الوضع
     sleep_mode = False
     sleep_reason = ""
     sleep_start = None
