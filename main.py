@@ -50,22 +50,24 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
 from telethon import TelegramClient, events
 import asyncio, datetime
 
-# متغيرات عامة للسليب والسكون
+# client: عرفه في مكان مناسب في كودك قبل استخدام هذا الجزء
+# example:
+# client = TelegramClient("session_name", api_id, api_hash)
+
 sleep_mode = False
 sleep_reason = ""
 sleep_start = None
 custom_reply = ""
 handled_messages = set()
 
-# التحقق من أنك المالك
 async def is_owner(event):
     return event.sender_id == (await client.get_me()).id
 
-# أمر تفعيل السليب مع سبب أو رسالة مخصصة
 @client.on(events.NewMessage(pattern=r'^\.سليب(?: (.+))?$'))
 async def activate_sleep(event):
     global sleep_mode, sleep_reason, sleep_start, custom_reply, handled_messages
-    if not await is_owner(event): return
+    if not await is_owner(event):
+        return
 
     reason = event.pattern_match.group(1)
     sleep_mode = True
@@ -74,13 +76,17 @@ async def activate_sleep(event):
     sleep_start = datetime.datetime.now()
     handled_messages.clear()
 
-    await event.edit("🟡 تم تفعيل وضع السليب.")
+    try:
+        await event.edit("🟡 تم تفعيل وضع السليب.")
+    except:
+        # في حال الرسالة ما يمكن تعديلها، فقط تجاهل
+        pass
 
-# أمر تفعيل السكون برسالة ثابتة أو مخصصة
 @client.on(events.NewMessage(pattern=r'^\.سكون(?: (.+))?$'))
 async def activate_static_sleep(event):
     global sleep_mode, sleep_reason, sleep_start, custom_reply, handled_messages
-    if not await is_owner(event): return
+    if not await is_owner(event):
+        return
 
     msg = event.pattern_match.group(1)
     sleep_mode = True
@@ -89,14 +95,22 @@ async def activate_static_sleep(event):
     sleep_start = datetime.datetime.now()
     handled_messages.clear()
 
-    await event.edit("🔕 تم تفعيل السكون برسالة ثابتة.")
+    try:
+        await event.edit("🔕 تم تفعيل السكون برسالة ثابتة.")
+    except:
+        pass
 
-# الرد بتعديل رسالة المرسل وحذفها بعد 4 ثواني
 @client.on(events.NewMessage(incoming=True))
 async def handle_incoming(event):
     global sleep_mode, sleep_reason, sleep_start, custom_reply, handled_messages
 
-    if not sleep_mode or await is_owner(event) or event.is_channel:
+    if not sleep_mode:
+        return
+
+    if await is_owner(event):
+        return
+
+    if event.is_channel:
         return
 
     if event.id in handled_messages:
@@ -118,10 +132,10 @@ async def handle_incoming(event):
         handled_messages.add(event.id)
         await asyncio.sleep(4)
         await event.delete()
-    except Exception:
+    except:
+        # تجاهل الأخطاء مثلا إذا الرسالة لا يمكن تعديلها أو حذفها
         pass
 
-# إلغاء السليب/السكون تلقائياً عند إرسال أي رسالة
 @client.on(events.NewMessage(outgoing=True))
 async def auto_cancel_sleep(event):
     global sleep_mode, sleep_reason, sleep_start, custom_reply, handled_messages
@@ -129,6 +143,7 @@ async def auto_cancel_sleep(event):
     if not sleep_mode:
         return
 
+    # حساب المدة
     delta = datetime.datetime.now() - sleep_start
     hours, rem = divmod(int(delta.total_seconds()), 3600)
     minutes, seconds = divmod(rem, 60)
@@ -142,9 +157,10 @@ async def auto_cancel_sleep(event):
 
     try:
         await client.send_message("me", report, parse_mode="html")
-    except Exception:
+    except:
         pass
 
+    # إعادة ضبط الحالة
     sleep_mode = False
     sleep_reason = ""
     sleep_start = None
@@ -153,7 +169,7 @@ async def auto_cancel_sleep(event):
 
     try:
         await event.respond("❌ تم إلغاء وضع السكون.")
-    except Exception:
+    except:
         pass
 # ─────────── الكتم ───────────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
