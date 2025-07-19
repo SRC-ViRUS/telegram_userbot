@@ -129,7 +129,97 @@ async def auto_react(event):
         except Exception as e:
             print(f"⚠️ خطأ في التفاعل مع {user_id}: {e}")
 # ───────── اسم مؤقت  ───────────
+from telethon import events, Button
+from datetime import datetime
+import asyncio
 
+sleep_mode = False
+basic_sleep_mode = False
+sleep_start = None
+sleep_reason = "غير محدد"
+custom_reply = None
+basic_custom_reply = None
+contacted_users = set()
+
+# أمر 1 - سليب مع وقت + رد مخصص
+@client.on(events.NewMessage(pattern=r'^\.سليب(?: (.+?))?(?: -- (.+))?$', outgoing=True))
+async def activate_full_sleep(event):
+    global sleep_mode, sleep_start, sleep_reason, contacted_users, custom_reply
+
+    reason = event.pattern_match.group(1) or "غير محدد"
+    reply_text = event.pattern_match.group(2) or "⚠️ الحساب غير نشط حالياً، سيتم الرد لاحقًا."
+
+    sleep_mode = True
+    sleep_start = datetime.now()
+    sleep_reason = reason
+    custom_reply = reply_text
+    contacted_users.clear()
+
+    await event.reply(
+        f"💤 تم تفعيل وضع السكون.\n📝 السبب: {sleep_reason}",
+        buttons=[Button.inline("🚫 إيقاف السكون", b"stop_sleep")]
+    )
+
+# أمر 2 - سكون بسيط برسالة مخصصة
+@client.on(events.NewMessage(pattern=r'^\.سكون(?: (.+))?$', outgoing=True))
+async def activate_basic_sleep(event):
+    global basic_sleep_mode, basic_custom_reply
+    reply_text = event.pattern_match.group(1) or "⚠️ الحساب غير متاح حاليًا، سيتم الرد لاحقًا."
+
+    basic_sleep_mode = True
+    basic_custom_reply = reply_text
+
+    await event.reply(
+        "💤 تم تفعيل وضع السكون البسيط.\n⚠️ سيتم إرسال الرد المخصص.",
+        buttons=[Button.inline("🚫 إيقاف السكون", b"stop_sleep")]
+    )
+
+# الرد التلقائي حسب الوضع
+@client.on(events.NewMessage(incoming=True))
+async def auto_reply(event):
+    global sleep_mode, sleep_start, sleep_reason, contacted_users, custom_reply, basic_sleep_mode, basic_custom_reply
+
+    sender = await event.get_sender()
+    if sender.bot or sender.is_self:
+        return
+
+    if sleep_mode:
+        if sender.id in contacted_users:
+            return
+        contacted_users.add(sender.id)
+
+        elapsed = datetime.now() - sleep_start
+        h, rem = divmod(elapsed.seconds, 3600)
+        m, s = divmod(rem, 60)
+
+        await event.reply(
+            f"{custom_reply}\n\n📝 السبب: {sleep_reason}\n⏱️ الغياب منذ: {h} ساعة و {m} دقيقة و {s} ثانية."
+        )
+
+    elif basic_sleep_mode:
+        await event.reply(basic_custom_reply)
+
+# أي رسالة من الحساب توقف السكون
+@client.on(events.NewMessage(outgoing=True))
+async def stop_on_user_message(event):
+    global sleep_mode, basic_sleep_mode, contacted_users
+    if sleep_mode or basic_sleep_mode:
+        count = len(contacted_users)
+        sleep_mode = False
+        basic_sleep_mode = False
+        contacted_users.clear()
+        await event.reply(f"✅ تم إنهاء وضع السكون تلقائيًا.\n📬 عدد المتصلين أثناء الغياب: {count}")
+
+# زر الإيقاف اليدوي
+@client.on(events.CallbackQuery(data=b"stop_sleep"))
+async def stop_sleep_button(event):
+    global sleep_mode, basic_sleep_mode, contacted_users
+    count = len(contacted_users)
+    sleep_mode = False
+    basic_sleep_mode = False
+    contacted_users.clear()
+    await event.answer("❌ تم إنهاء السكون.")
+    await event.edit(f"✅ تم تعطيل وضع السكون يدويًا.\n📬 عدد المتصلين أثناء الغياب: {count}")
 # ─────────── الكتم ───────────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def cmd_mute(event):
@@ -598,6 +688,12 @@ async def cmds(event):
 <code>.كشف</code> – معلومات القروب
 <code>.فحص</code> – فحص البوت
 <code>.الاوامر</code> – عرض قائمة الأوامر
+sleep_commands_list =
+<b>💤 أوامر السكون:</b>
+.سليب [السبب] -- [الرد المخصص]    ➤ تفعيل وضع السكون الكامل مع حساب الوقت ورد مخصص (اختياري)
+.سكون [الرد المخصص]               ➤ تفعيل وضع السكون البسيط مع رد ثابت فقط (اختياري)
+أي رسالة ترسلها                   ➤ إيقاف السكون تلقائياً وإظهار عدد المتصلين
+زر "🚫 إيقاف السكون"              ➤ إيقاف السكون يدويًا في أي وقت
 """
 
     await event.edit(txt, parse_mode="html")
