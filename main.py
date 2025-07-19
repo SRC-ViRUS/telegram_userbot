@@ -47,98 +47,112 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
         #_______ازعاج ايموجي ________
-import datetime
-from telethon import events
+from telethon import TelegramClient, events
+import asyncio, datetime
 
-# متغيرات السكون
+# متغيرات عامة للسليب والسكون
 sleep_mode = False
-sleep_reason = None
+sleep_reason = ""
 sleep_start = None
-custom_reply = None
-reply_msg = None
+custom_reply = ""
+sleep_messages = set()
 
-# ✅ أمر تفعيل السكون فقط لأمر صريح .سليب
-@client.on(events.NewMessage(pattern=r'^\.سليب(?: (.+?))?(?: -- (.+))?$', outgoing=True))
+# تحقق المالك
+async def is_owner(event):
+    return event.sender_id == (await client.get_me()).id
+
+# أمر تفعيل السليب مع سبب أو رسالة مخصصة
+@client.on(events.NewMessage(pattern=r'^\.سليب(?: (.+))?$'))
 async def activate_sleep(event):
-    global sleep_mode, sleep_reason, sleep_start, custom_reply, reply_msg
+    global sleep_mode, sleep_reason, sleep_start, custom_reply
+    if not await is_owner(event): return
 
-    if sleep_mode:
-        await event.reply("⚠️ وضع السكون مفعل مسبقاً.")
+    reason = event.pattern_match.group(1)
+    sleep_mode = True
+    sleep_reason = reason or "غير متوفر حالياً"
+    custom_reply = "" if not reason else reason
+    sleep_start = datetime.datetime.now()
+
+    await event.edit("🟡 تم تفعيل وضع السليب.")
+
+# أمر تفعيل السكون برسالة ثابتة أو مخصصة
+@client.on(events.NewMessage(pattern=r'^\.سكون(?: (.+))?$'))
+async def activate_static_sleep(event):
+    global sleep_mode, sleep_reason, sleep_start, custom_reply
+    if not await is_owner(event): return
+
+    msg = event.pattern_match.group(1)
+    sleep_mode = True
+    sleep_reason = "سكون ثابت"
+    custom_reply = msg or "🚫 غير نشط حالياً."
+    sleep_start = datetime.datetime.now()
+
+    await event.edit("🔕 تم تفعيل السكون برسالة ثابتة.")
+
+# الرد التلقائي أثناء السكون أو السليب (يعدل رسالة المرسل)
+@client.on(events.NewMessage(incoming=True))
+async def auto_reply(event):
+    global sleep_mode, custom_reply, sleep_messages
+
+    if not sleep_mode or await is_owner(event) or event.is_channel:
         return
 
-    sleep_mode = True
-    sleep_start = datetime.datetime.now()
-    sleep_reason = event.pattern_match.group(1)
-    custom_reply = event.pattern_match.group(2)
+    if event.id in sleep_messages:
+        return
 
-    txt = "🛌 <b>تم تفعيل وضع السكون.</b>\n"
-    if sleep_reason:
-        txt += f"📌 <b>السبب:</b> {sleep_reason}\n"
-    txt += "⏱️ سيتم الرد تلقائيًا على من يراسلك."
+    if custom_reply:
+        msg = custom_reply
+    elif sleep_start:
+        delta = datetime.datetime.now() - sleep_start
+        hours, rem = divmod(int(delta.total_seconds()), 3600)
+        minutes, seconds = divmod(rem, 60)
+        elapsed = f"{hours} ساعة و {minutes} دقيقة و {seconds} ثانية" if hours else f"{minutes} دقيقة و {seconds} ثانية"
+        msg = f"🔕 المستخدم غير نشط منذ {elapsed}\n💬 السبب: {sleep_reason}"
+    else:
+        msg = "🚫 المستخدم غير نشط حالياً."
 
     try:
-        reply_msg = await event.reply(txt, parse_mode="html")
+        await event.edit(msg)
+        sleep_messages.add(event.id)
+        await asyncio.sleep(4)
         await event.delete()
     except:
         pass
 
-# ✅ إلغاء السكون تلقائياً عند أول رسالة *عادية* صادرة (بدون أن تكون .سليب)
+# إلغاء السكون أو السليب تلقائيًا عند إرسال أي رسالة
 @client.on(events.NewMessage(outgoing=True))
-async def deactivate_sleep(event):
-    global sleep_mode, sleep_reason, sleep_start, custom_reply, reply_msg
+async def cancel_sleep(event):
+    global sleep_mode, sleep_reason, sleep_start, custom_reply, sleep_messages
 
-    if sleep_mode and not event.raw_text.startswith(".سليب"):
-        sleep_mode = False
-        sleep_reason = None
-        sleep_start = None
-        custom_reply = None
+    if not sleep_mode:
+        return
 
-        try:
-            if reply_msg:
-                await reply_msg.delete()
-                reply_msg = None
-        except:
-            pass
+    delta = datetime.datetime.now() - sleep_start
+    hours, rem = divmod(int(delta.total_seconds()), 3600)
+    minutes, seconds = divmod(rem, 60)
+    elapsed = f"{hours} ساعة و {minutes} دقيقة و {seconds} ثانية" if hours else f"{minutes} دقيقة و {seconds} ثانية"
 
-# ✅ الرد التلقائي للرسائل الواردة أثناء السكون
-@client.on(events.NewMessage(incoming=True))
-async def reply_if_sleeping(event):
-    if sleep_mode and not event.out:
-        elapsed = datetime.datetime.now() - sleep_start
-        mins = int(elapsed.total_seconds() // 60)
-        h, m = divmod(mins, 60)
-        time_away = f"{h} ساعة و {m} دقيقة" if h else f"{m} دقيقة"
+    report = f"""🔔 <b>تم إلغاء وضع السكون</b>
+📝 <b>السبب:</b> {sleep_reason}
+⏱️ <b>استمر:</b> {elapsed}
+👤 <b>الإلغاء:</b> أنت (تم إرسال/رد رسالة)
+"""
 
-        txt = f"🛌 <b>الحساب غير نشط حالياً</b>\n"
-        if sleep_reason:
-            txt += f"📌 <b>السبب:</b> {sleep_reason}\n"
-        txt += f"⏱️ <b>آخر ظهور:</b> منذ {time_away}"
-        if custom_reply:
-            txt += f"\n\n{custom_reply}"
+    try:
+        await client.send_message("me", report, parse_mode="html")
+    except Exception:
+        pass
 
-        try:
-            await event.reply(txt, parse_mode="html")
-        except:
-            pass
+    sleep_mode = False
+    sleep_reason = ""
+    sleep_start = None
+    custom_reply = ""
+    sleep_messages.clear()
 
-# ✅ عرض حالة السكون
-@client.on(events.NewMessage(pattern=r'^\.حالة_السكون$', outgoing=True))
-async def show_sleep_status(event):
-    if sleep_mode:
-        elapsed = datetime.datetime.now() - sleep_start
-        mins = int(elapsed.total_seconds() // 60)
-        h, m = divmod(mins, 60)
-        time_away = f"{h} ساعة و {m} دقيقة" if h else f"{m} دقيقة"
-
-        msg = f"""🛌 <b>السكون مفعل</b>
-📌 <b>السبب:</b> {sleep_reason or 'غير محدد'}
-⏱️ <b>منذ:</b> {time_away}"""
-        if custom_reply:
-            msg += f"\n📝 <b>الرد المخصص:</b>\n{custom_reply}"
-
-        await event.reply(msg, parse_mode="html")
-    else:
-        await event.reply("✅ لست في وضع السكون حالياً.", parse_mode="html")
+    try:
+        await event.respond("❌ تم إلغاء السكون.")
+    except:
+        pass
 # ───────── اسم مؤقت  ───────────
 from telethon import events, Button
 from datetime import datetime
