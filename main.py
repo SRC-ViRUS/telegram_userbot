@@ -47,10 +47,9 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
         #_______ازعاج ايموجي ________
-    from telethon import TelegramClient, events
-import asyncio, datetime
+        from telethon import TelegramClient, events
+import asyncio, datetime, traceback
 
-# تأكد من تعريف client قبل استخدام الكود:
 # client = TelegramClient("session_name", api_id, api_hash)
 
 sleep_mode = False
@@ -76,9 +75,9 @@ async def activate_sleep(event):
     handled_messages.clear()
 
     try:
-        await event.delete()  # حذف أمر التفعيل
-    except:
-        pass
+        await event.delete()
+    except Exception:
+        traceback.print_exc()
 
     try:
         msg = await event.respond(f"""🟡 <b>تم تفعيل وضع السليب</b>
@@ -87,8 +86,8 @@ async def activate_sleep(event):
 """, parse_mode="html")
         await asyncio.sleep(2)
         await msg.delete()
-    except:
-        pass
+    except Exception:
+        traceback.print_exc()
 
 @client.on(events.NewMessage(pattern=r'^\.سكون(?: (.+))?$'))
 async def activate_static_sleep(event):
@@ -105,15 +104,15 @@ async def activate_static_sleep(event):
 
     try:
         await event.delete()
-    except:
-        pass
+    except Exception:
+        traceback.print_exc()
 
     try:
         msg = await event.respond("🔕 تم تفعيل السكون برسالة ثابتة.")
         await asyncio.sleep(2)
         await msg.delete()
-    except:
-        pass
+    except Exception:
+        traceback.print_exc()
 
 @client.on(events.NewMessage(incoming=True))
 async def handle_incoming(event):
@@ -146,14 +145,19 @@ async def handle_incoming(event):
         handled_messages.add(key)
         await asyncio.sleep(4)
         await event.delete()
-    except:
-        pass
+    except Exception:
+        traceback.print_exc()
 
 @client.on(events.NewMessage(outgoing=True))
 async def auto_cancel_sleep(event):
     global sleep_mode, sleep_reason, sleep_start, custom_reply, handled_messages
 
     if not sleep_mode:
+        return
+
+    text = event.raw_text or ""
+    # تجاهل أوامر التفعيل لتجنب الإلغاء الفوري
+    if text.startswith(".سليب") or text.startswith(".سكون"):
         return
 
     delta = datetime.datetime.now() - sleep_start
@@ -169,8 +173,8 @@ async def auto_cancel_sleep(event):
 
     try:
         await client.send_message("me", report, parse_mode="html")
-    except:
-        pass
+    except Exception:
+        traceback.print_exc()
 
     sleep_mode = False
     sleep_reason = ""
@@ -182,8 +186,8 @@ async def auto_cancel_sleep(event):
         msg = await event.respond("❌ تم إلغاء وضع السكون.")
         await asyncio.sleep(2)
         await msg.delete()
-    except:
-        pass
+    except Exception:
+        traceback.print_exc()
 # ─────────── الكتم ───────────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def cmd_mute(event):
