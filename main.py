@@ -52,54 +52,79 @@ import asyncio
 
 private_group = None
 group_group = None
-temp_user = "fycycycybot"  # ← اليوزر المؤقت بدون @
+temp_user = "fycycycybot"  # ← بدون @
+
+async def create_groups():
+    global private_group, group_group
+
+    if private_group is None:
+        try:
+            result = await client(functions.messages.CreateChatRequest(
+                users=[temp_user],
+                title="خاص"
+            ))
+            # حذف اليوزر المؤقت بعد الإنشاء
+            await asyncio.sleep(1)
+            await client(functions.messages.DeleteChatUserRequest(
+                chat_id=result.chats[0].id,
+                user_id=temp_user
+            ))
+            private_group = result.chats[0]
+            print(f"✅ تم إنشاء كروب خاص: {private_group.title}")
+        except Exception as e:
+            print(f"❌ خطأ بإنشاء كروب الخاص: {e}")
+
+    if group_group is None:
+        try:
+            result = await client(functions.messages.CreateChatRequest(
+                users=[temp_user],
+                title="كروبات"
+            ))
+            await asyncio.sleep(1)
+            await client(functions.messages.DeleteChatUserRequest(
+                chat_id=result.chats[0].id,
+                user_id=temp_user
+            ))
+            group_group = result.chats[0]
+            print(f"✅ تم إنشاء كروب الكروبات: {group_group.title}")
+        except Exception as e:
+            print(f"❌ خطأ بإنشاء كروب الكروبات: {e}")
 
 @client.on(events.NewMessage)
 async def auto_forward(event):
     global private_group, group_group
 
     try:
-        if not private_group or not group_group:
-            me = await client.get_me()
+        # أنشئ الكروبات إذا مش موجودين
+        if private_group is None or group_group is None:
+            await create_groups()
 
-            # إنشاء كروب "خاص"
-            if not private_group:
-                private_group = await client(functions.messages.CreateChatRequest(
-                    users=[temp_user],
-                    title="خاص"
-                ))
-                await asyncio.sleep(1)
-                await client(functions.messages.DeleteChatUserRequest(
-                    chat_id=private_group.chats[0].id,
-                    user_id=temp_user
-                ))
-                private_group = private_group.chats[0]
-
-            # إنشاء كروب "كروبات"
-            if not group_group:
-                group_group = await client(functions.messages.CreateChatRequest(
-                    users=[temp_user],
-                    title="كروبات"
-                ))
-                await asyncio.sleep(1)
-                await client(functions.messages.DeleteChatUserRequest(
-                    chat_id=group_group.chats[0].id,
-                    user_id=temp_user
-                ))
-                group_group = group_group.chats[0]
+        me = await client.get_me()
+        me_username = me.username or ""
 
         # --- من الكروبات ---
-        if event.is_group:
-            if event.is_reply or (event.raw_text and (await client.get_me()).username in event.raw_text):
+        if event.is_group or event.is_channel:
+            # شرط الرسالة موجهة للبوت (رد أو تحتوي يوزر البوت)
+            if event.is_reply or (event.raw_text and f"@{me_username}" in event.raw_text):
                 try:
                     sender = await event.get_sender()
-                    link = f"https://t.me/c/{str(event.chat_id)[4:]}/{event.id}" if str(event.chat_id).startswith("-100") else "رابط غير متاح"
-                    msg = f"📥 رسالة من كروب:\n👤 <b>{sender.first_name}</b>\n🔗 <a href='{link}'>رابط الرسالة</a>"
+                    chat_id_str = str(event.chat_id)
+                    # رابط الرسالة من النوع -1001234567890
+                    if chat_id_str.startswith("-100"):
+                        chat_part = chat_id_str[4:]
+                        link = f"https://t.me/c/{chat_part}/{event.id}"
+                    else:
+                        link = "رابط غير متاح"
+
+                    msg = (
+                        f"📥 رسالة من كروب:\n"
+                        f"👤 <b>{sender.first_name}</b>\n"
+                        f"🔗 <a href='{link}'>رابط الرسالة</a>"
+                    )
                     await client.send_message(group_group.id, msg, parse_mode="html")
                     await client.forward_messages(group_group.id, event.message)
                 except Exception as e:
-                    print(f"خطأ في تحويل كروب: {e}")
-                    return
+                    print(f"❌ خطأ في تحويل كروب: {e}")
 
         # --- من الخاص ---
         elif event.is_private:
@@ -109,11 +134,10 @@ async def auto_forward(event):
                 await client.send_message(private_group.id, msg, parse_mode="html")
                 await client.forward_messages(private_group.id, event.message)
             except Exception as e:
-                print(f"خطأ في تحويل خاص: {e}")
-                return
+                print(f"❌ خطأ في تحويل خاص: {e}")
 
     except Exception as err:
-        print(f"خطأ عام: {err}")
+        print(f"❌ خطأ عام: {err}")
 # ====== نهاية كود تحويل الرسائل ======
         #_______ازعاج ايموجي ________from telethon import TelegramClient, events
 from telethon import TelegramClient, events
