@@ -48,146 +48,123 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         os.remove(tmp)
         #_______ازعاج ايموجي ________
         from telethon import TelegramClient, events
-import asyncio, datetime, traceback
+import asyncio, datetime
 
-# client = TelegramClient("session_name", api_id, api_hash)
+# client = TelegramClient("your_session", api_id, api_hash)
 
 sleep_mode = False
 sleep_reason = ""
 sleep_start = None
 custom_reply = ""
-handled_messages = set()
+replied_ids = set()
 
 async def is_owner(event):
-    return event.sender_id == (await client.get_me()).id
+    return (await client.get_me()).id == event.sender_id
 
 @client.on(events.NewMessage(pattern=r'^\.سليب(?: (.+))?$'))
-async def activate_sleep(event):
-    global sleep_mode, sleep_reason, sleep_start, custom_reply, handled_messages
+async def sleep_command(event):
+    global sleep_mode, sleep_reason, sleep_start, custom_reply, replied_ids
+
     if not await is_owner(event):
         return
 
-    reason = event.pattern_match.group(1)
     sleep_mode = True
-    sleep_reason = reason or "غير متوفر حالياً"
-    custom_reply = "" if not reason else reason
+    sleep_reason = event.pattern_match.group(1) or "غير متوفر حالياً"
     sleep_start = datetime.datetime.now()
-    handled_messages.clear()
+    custom_reply = ""
+    replied_ids.clear()
 
-    try:
-        await event.delete()
-    except Exception:
-        traceback.print_exc()
-
-    try:
-        msg = await event.respond(f"""🟡 <b>تم تفعيل وضع السليب</b>
+    await event.delete()
+    m = await event.respond(f"""🟡 <b>تم تفعيل وضع السليب</b>
 💬 <b>السبب:</b> {sleep_reason}
-⏱️ <b>منذ:</b> 0 ثانية
-""", parse_mode="html")
-        await asyncio.sleep(2)
-        await msg.delete()
-    except Exception:
-        traceback.print_exc()
+⏱️ <b>منذ:</b> 0 ثانية""", parse_mode="html")
+    await asyncio.sleep(2)
+    await m.delete()
+
 
 @client.on(events.NewMessage(pattern=r'^\.سكون(?: (.+))?$'))
-async def activate_static_sleep(event):
-    global sleep_mode, sleep_reason, sleep_start, custom_reply, handled_messages
+async def static_sleep_command(event):
+    global sleep_mode, sleep_reason, sleep_start, custom_reply, replied_ids
+
     if not await is_owner(event):
         return
 
-    msg = event.pattern_match.group(1)
     sleep_mode = True
+    custom_reply = event.pattern_match.group(1) or "🚫 غير متاح حالياً."
     sleep_reason = "سكون ثابت"
-    custom_reply = msg or "🚫 غير نشط حالياً."
     sleep_start = datetime.datetime.now()
-    handled_messages.clear()
+    replied_ids.clear()
 
-    try:
-        await event.delete()
-    except Exception:
-        traceback.print_exc()
+    await event.delete()
+    m = await event.respond("🔕 تم تفعيل السكون برسالة ثابتة.")
+    await asyncio.sleep(2)
+    await m.delete()
 
-    try:
-        msg = await event.respond("🔕 تم تفعيل السكون برسالة ثابتة.")
-        await asyncio.sleep(2)
-        await msg.delete()
-    except Exception:
-        traceback.print_exc()
 
 @client.on(events.NewMessage(incoming=True))
-async def handle_incoming(event):
-    global sleep_mode, sleep_reason, sleep_start, custom_reply, handled_messages
+async def on_private_message(event):
+    global sleep_mode, sleep_reason, sleep_start, custom_reply, replied_ids
 
-    if not sleep_mode:
-        return
-    if await is_owner(event):
+    if not sleep_mode or await is_owner(event):
         return
     if event.is_group or event.is_channel:
         return
 
-    key = (event.chat_id, event.id)
-    if key in handled_messages:
+    key = (event.sender_id, event.id)
+    if key in replied_ids:
         return
 
-    if custom_reply:
-        msg = custom_reply
-    elif sleep_start:
-        delta = datetime.datetime.now() - sleep_start
-        hours, rem = divmod(int(delta.total_seconds()), 3600)
-        minutes, seconds = divmod(rem, 60)
-        elapsed = f"{hours} ساعة و {minutes} دقيقة و {seconds} ثانية" if hours else f"{minutes} دقيقة و {seconds} ثانية"
-        msg = f"🔕 المستخدم غير نشط منذ {elapsed}\n💬 السبب: {sleep_reason}"
-    else:
-        msg = "🚫 المستخدم غير نشط حالياً."
+    replied_ids.add(key)
 
-    try:
-        await event.reply(msg)
-        handled_messages.add(key)
-        await asyncio.sleep(4)
-        await event.delete()
-    except Exception:
-        traceback.print_exc()
+    if custom_reply:
+        text = custom_reply
+    else:
+        elapsed = datetime.datetime.now() - sleep_start
+        total = int(elapsed.total_seconds())
+        h, rem = divmod(total, 3600)
+        m, s = divmod(rem, 60)
+        elapsed_str = f"{h} ساعة و {m} دقيقة و {s} ثانية" if h else f"{m} دقيقة و {s} ثانية"
+        text = f"🔕 المستخدم غير نشط منذ {elapsed_str}\n💬 السبب: {sleep_reason}"
+
+    r = await event.reply(text)
+    await asyncio.sleep(3)
+    await r.delete()
+
 
 @client.on(events.NewMessage(outgoing=True))
-async def auto_cancel_sleep(event):
-    global sleep_mode, sleep_reason, sleep_start, custom_reply, handled_messages
+async def cancel_sleep(event):
+    global sleep_mode, sleep_reason, sleep_start, custom_reply, replied_ids
 
     if not sleep_mode:
         return
 
-    text = event.raw_text or ""
-    # تجاهل أوامر التفعيل لتجنب الإلغاء الفوري
-    if text.startswith(".سليب") or text.startswith(".سكون"):
-        return
+    if event.raw_text.startswith(".سليب") or event.raw_text.startswith(".سكون"):
+        return  # لا تلغي السكون إذا هو أمر تفعيل
 
-    delta = datetime.datetime.now() - sleep_start
-    hours, rem = divmod(int(delta.total_seconds()), 3600)
-    minutes, seconds = divmod(rem, 60)
-    elapsed = f"{hours} ساعة و {minutes} دقيقة و {seconds} ثانية" if hours else f"{minutes} دقيقة و {seconds} ثانية"
+    elapsed = datetime.datetime.now() - sleep_start
+    total = int(elapsed.total_seconds())
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    elapsed_str = f"{h} ساعة و {m} دقيقة و {s} ثانية" if h else f"{m} دقيقة و {s} ثانية"
 
-    report = f"""🔔 <b>تم إلغاء وضع السكون</b>
+    # أرسل تقرير للإدارة
+    await client.send_message("me", f"""🔔 <b>تم إلغاء وضع السكون</b>
 📝 <b>السبب:</b> {sleep_reason}
-⏱️ <b>استمر:</b> {elapsed}
-👤 <b>الإلغاء بواسطة:</b> أنت (تم إرسال/رد رسالة)
-"""
+⏱️ <b>استمر:</b> {elapsed_str}
+👤 <b>تم الإلغاء بإرسال رسالة.</b>""", parse_mode="html")
 
-    try:
-        await client.send_message("me", report, parse_mode="html")
-    except Exception:
-        traceback.print_exc()
-
+    # إعادة تعيين الوضع
     sleep_mode = False
     sleep_reason = ""
     sleep_start = None
     custom_reply = ""
-    handled_messages.clear()
+    replied_ids.clear()
 
-    try:
-        msg = await event.respond("❌ تم إلغاء وضع السكون.")
-        await asyncio.sleep(2)
-        await msg.delete()
-    except Exception:
-        traceback.print_exc()
+    # حذف رسالة الإلغاء المؤقتة
+    m = await event.respond("❌ تم إلغاء السكون.")
+    await asyncio.sleep(2)
+    await m.delete()
+        
 # ─────────── الكتم ───────────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def cmd_mute(event):
