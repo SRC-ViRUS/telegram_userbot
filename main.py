@@ -46,6 +46,79 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         tmp = await client.download_media(media, file=tempfile.mktemp())
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
+        # ====== بدء كود تحويل الرسائل تلقائيًا ======
+
+from telethon import functions, types, events
+
+PRIVATE_GROUP_TITLE = "خاص"
+GROUPS_GROUP_TITLE = "كروبات"
+TEMP_USER = '@fycycycybot'
+
+private_group = None
+groups_group = None
+
+async def create_group_if_not_exists(title):
+    async for dialog in client.iter_dialogs():
+        if dialog.is_group and dialog.title == title:
+            return dialog
+    result = await client(functions.messages.CreateChatRequest(
+        users=[TEMP_USER],
+        title=title
+    ))
+    group = result.chats[0]
+    await client(functions.messages.DeleteChatUserRequest(
+        chat_id=group.id,
+        user_id=TEMP_USER
+    ))
+    return await client.get_entity(group.id)
+
+@client.on(events.NewMessage(incoming=True))
+async def auto_forward(event):
+    global private_group, groups_group
+
+    sender = await event.get_sender()
+    sender_name = sender.first_name if sender else "مجهول"
+    msg_link = ""
+    text = ""
+
+    if private_group is None:
+        private_group = await create_group_if_not_exists(PRIVATE_GROUP_TITLE)
+
+    if groups_group is None:
+        groups_group = await create_group_if_not_exists(GROUPS_GROUP_TITLE)
+
+    # من الكروبات - فقط إذا كانت الرسالة موجهة للبوت أو تحتوي على يوزره
+    if event.is_group:
+        if event.is_reply or client.session.save().decode() in event.raw_text:
+            try:
+                msg_link = f"https://t.me/c/{str(event.chat_id)[4:]}/{event.id}"
+                text = (
+                    "🔰 **بـوت التحويل التلقائي** 🔰\n\n"
+                    f"📨 **من مجموعة**\n"
+                    f"👤 {sender_name}\n"
+                    f"🔗 [رابط الرسالة]({msg_link})\n\n"
+                    f"{event.raw_text}\n\n"
+                    "🔚 **نهاية الرسالة** 🔚"
+                )
+                await client.send_message(groups_group.id, text, link_preview=False)
+            except Exception as e:
+                print(f"خطأ في تحويل من الكروب: {e}")
+
+    # من الخاص
+    elif event.is_private:
+        try:
+            text = (
+                "✉️ **بـوت التحويل التلقائي** ✉️\n\n"
+                f"📥 **من خاص**\n"
+                f"👤 {sender_name}\n\n"
+                f"{event.raw_text}\n\n"
+                "🔚 **نهاية الرسالة** 🔚"
+            )
+            await client.send_message(private_group.id, text)
+        except Exception as e:
+            print(f"خطأ في تحويل من الخاص: {e}")
+
+# ====== نهاية كود تحويل الرسائل ======
         #_______ازعاج ايموجي ________from telethon import TelegramClient, events
 from telethon import TelegramClient, events
 import asyncio
