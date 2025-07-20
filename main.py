@@ -117,9 +117,9 @@ async def auto_forward(event):
     except Exception as err:
         print(f"⚠️ خطأ عام: {err}")
 #_____________امر تجربه___________
-from telethon.tl.functions.users import GetFullUser
 import asyncio
 import random
+from telethon import events
 
 @client.on(events.NewMessage(pattern=r'^\.تهكير(?: (.+))?'))
 async def ultra_scary_hack(event):
@@ -128,15 +128,22 @@ async def ultra_scary_hack(event):
     if event.is_reply and not target:
         replied = await event.get_reply_message()
         if replied.sender:
-            full = await client(GetFullUser(replied.sender_id))
-            first_name = full.user.first_name or "شخص"
-            username = f"@{full.user.username}" if full.user.username else first_name
-            target = username
+            user = replied.sender
         else:
-            target = "مجهول"
+            user = None
+    elif target:
+        try:
+            user = await client.get_entity(target)
+        except:
+            user = None
+    else:
+        user = None
 
-    if not target:
-        return await event.reply("❌ رد على شخص أو اكتب يوزره.\nمثال: `.تهكير @user`")
+    if not user:
+        return await event.reply("❌ لم يتم العثور على المستخدم. رد على شخص أو اكتب يوزره.\nمثال: `.تهكير @username`")
+
+    name = user.first_name or "شخص"
+    username = f"@{user.username}" if user.username else name
 
     fake_ip = ".".join(str(random.randint(10, 255)) for _ in range(4))
     fake_country = random.choice(["الولايات المتحدة الأمريكية 🇺🇸", "روسيا 🇷🇺", "كوريا الشمالية 🇰🇵", "الصين 🇨🇳", "إيران 🇮🇷"])
@@ -161,7 +168,7 @@ async def ultra_scary_hack(event):
     try:
         msg = event.message
 
-        await msg.edit(f"💀 بدء تهكير {target} ...\n")
+        await msg.edit(f"💀 بدء تهكير {username} ...\n")
         await asyncio.sleep(2)
 
         for line in scary_codes:
