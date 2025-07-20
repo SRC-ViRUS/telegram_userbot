@@ -46,92 +46,74 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         tmp = await client.download_media(media, file=tempfile.mktemp())
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
-        # ====== بدء كود تحويل الرسائل تلقائيًا ======#
-
-
-from telethon import functions, events, errors
-import logging
-
-# ====== بدء كود تحويل الرسائل ======
-
-PRIVATE_GROUP_TITLE = "خاص"
-GROUPS_GROUP_TITLE = "كروبات"
-TEMP_USER = '@fycycycybot'  # بوت أو مستخدم مؤقت لإضافته ثم حذفه
+     # ====== بدء كود تحويل الرسائل تلقائيًا ======
+from telethon import events, functions
+import asyncio
 
 private_group = None
-groups_group = None
+group_group = None
+temp_user = "fycycycybot"  # ← اليوزر المؤقت بدون @
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-async def create_group_if_not_exists(title: str):
-    async for dialog in client.iter_dialogs():
-        if dialog.is_group and dialog.title.lower() == title.lower():
-            logger.info(f"تم العثور على المجموعة: {title}")
-            return dialog
-    try:
-        logger.info(f"إنشاء مجموعة جديدة باسم: {title}")
-        result = await client(functions.messages.CreateChatRequest(
-            users=[TEMP_USER],
-            title=title
-        ))
-        group = result.chats[0]
-        await client(functions.messages.DeleteChatUserRequest(
-            chat_id=group.id,
-            user_id=TEMP_USER
-        ))
-        logger.info(f"تم حذف المستخدم المؤقت {TEMP_USER} من المجموعة {title}")
-        return await client.get_entity(group.id)
-    except errors.RPCError as e:
-        logger.error(f"خطأ أثناء إنشاء أو تعديل المجموعة '{title}': {e}")
-        return None
-
-@client.on(events.NewMessage(incoming=True))
+@client.on(events.NewMessage)
 async def auto_forward(event):
-    global private_group, groups_group
-
-    if private_group is None:
-        private_group = await create_group_if_not_exists(PRIVATE_GROUP_TITLE)
-        if private_group is None:
-            logger.error(f"فشل الحصول على مجموعة {PRIVATE_GROUP_TITLE}")
-            return
-    if groups_group is None:
-        groups_group = await create_group_if_not_exists(GROUPS_GROUP_TITLE)
-        if groups_group is None:
-            logger.error(f"فشل الحصول على مجموعة {GROUPS_GROUP_TITLE}")
-            return
-
-    sender = await event.get_sender()
-    sender_name = getattr(sender, 'first_name', None) or "مجهول"
+    global private_group, group_group
 
     try:
+        if not private_group or not group_group:
+            me = await client.get_me()
+
+            # إنشاء كروب "خاص"
+            if not private_group:
+                private_group = await client(functions.messages.CreateChatRequest(
+                    users=[temp_user],
+                    title="خاص"
+                ))
+                await asyncio.sleep(1)
+                await client(functions.messages.DeleteChatUserRequest(
+                    chat_id=private_group.chats[0].id,
+                    user_id=temp_user
+                ))
+                private_group = private_group.chats[0]
+
+            # إنشاء كروب "كروبات"
+            if not group_group:
+                group_group = await client(functions.messages.CreateChatRequest(
+                    users=[temp_user],
+                    title="كروبات"
+                ))
+                await asyncio.sleep(1)
+                await client(functions.messages.DeleteChatUserRequest(
+                    chat_id=group_group.chats[0].id,
+                    user_id=temp_user
+                ))
+                group_group = group_group.chats[0]
+
+        # --- من الكروبات ---
         if event.is_group:
-            # فقط إذا كانت الرسالة موجهة للبوت أو تحتوي على TEMP_USER
-            if event.is_reply or (TEMP_USER.lower() in (event.raw_text or "").lower()):
-                msg_link = f"https://t.me/c/{str(event.chat_id)[4:]}/{event.id}"
-                text = (
-                    "🔰 **بـوت التحويل التلقائي** 🔰\n\n"
-                    f"📨 **من مجموعة**\n"
-                    f"👤 {sender_name}\n"
-                    f"🔗 [رابط الرسالة]({msg_link})\n\n"
-                    f"{event.text or event.raw_text or ''}\n\n"
-                    "🔚 **نهاية الرسالة** 🔚"
-                )
-                await client.send_message(groups_group.id, text, link_preview=False)
+            if event.is_reply or (event.raw_text and (await client.get_me()).username in event.raw_text):
+                try:
+                    sender = await event.get_sender()
+                    link = f"https://t.me/c/{str(event.chat_id)[4:]}/{event.id}" if str(event.chat_id).startswith("-100") else "رابط غير متاح"
+                    msg = f"📥 رسالة من كروب:\n👤 <b>{sender.first_name}</b>\n🔗 <a href='{link}'>رابط الرسالة</a>"
+                    await client.send_message(group_group.id, msg, parse_mode="html")
+                    await client.forward_messages(group_group.id, event.message)
+                except Exception as e:
+                    print(f"خطأ في تحويل كروب: {e}")
+                    return
 
+        # --- من الخاص ---
         elif event.is_private:
-            text = (
-                "✉️ **بـوت التحويل التلقائي** ✉️\n\n"
-                f"📥 **من خاص**\n"
-                f"👤 {sender_name}\n\n"
-                f"{event.text or event.raw_text or ''}\n\n"
-                "🔚 **نهاية الرسالة** 🔚"
-            )
-            await client.send_message(private_group.id, text)
+            try:
+                sender = await event.get_sender()
+                msg = f"📨 رسالة خاصة:\n👤 <b>{sender.first_name}</b>"
+                await client.send_message(private_group.id, msg, parse_mode="html")
+                await client.forward_messages(private_group.id, event.message)
+            except Exception as e:
+                print(f"خطأ في تحويل خاص: {e}")
+                return
 
-    except Exception as e:
-        logger.error(f"خطأ أثناء تحويل الرسالة: {e}")
-
+    except Exception as err:
+        print(f"خطأ عام: {err}")
 # ====== نهاية كود تحويل الرسائل ======
         #_______ازعاج ايموجي ________from telethon import TelegramClient, events
 from telethon import TelegramClient, events
