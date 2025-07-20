@@ -75,9 +75,10 @@ async def sleep_command(event):
     custom_reply = ""
 
     await event.delete()
-    await event.respond(f"""🟡 <b>تم تفعيل وضع السليب</b>
+    msg = await event.respond(f"""🟡 <b>تم تفعيل وضع السليب</b>
 💬 <b>السبب:</b> {sleep_reason}
 ⏱️ <b>منذ:</b> 0 دقيقة و 0 ثانية""", parse_mode="html")
+    asyncio.create_task(delete_after(msg, 2))
 
 @client.on(events.NewMessage(pattern=r'^\.سكون(?: (.+))?$'))
 async def static_sleep_command(event):
@@ -92,7 +93,8 @@ async def static_sleep_command(event):
     sleep_start = datetime.datetime.now()
 
     await event.delete()
-    await event.respond("🔕 تم تفعيل السكون برسالة ثابتة.")
+    msg = await event.respond("🔕 تم تفعيل السكون برسالة ثابتة.")
+    asyncio.create_task(delete_after(msg, 2))
 
 @client.on(events.NewMessage(incoming=True))
 async def on_private_message(event):
@@ -103,17 +105,20 @@ async def on_private_message(event):
     if event.is_group or event.is_channel:
         return
 
-    if custom_reply:
-        text = custom_reply
-    else:
-        elapsed = datetime.datetime.now() - sleep_start
-        total = int(elapsed.total_seconds())
-        h, rem = divmod(total, 3600)
-        m, s = divmod(rem, 60)
-        elapsed_str = f"{h} ساعة و {m} دقيقة و {s} ثانية" if h else f"{m} دقيقة و {s} ثانية"
-        text = f"🔕 المستخدم غير نشط منذ {elapsed_str}\n💬 السبب: {sleep_reason}"
+    async def reply_now():
+        if custom_reply:
+            text = custom_reply
+        else:
+            elapsed = datetime.datetime.now() - sleep_start
+            total = int(elapsed.total_seconds())
+            h, rem = divmod(total, 3600)
+            m, s = divmod(rem, 60)
+            elapsed_str = f"{h} ساعة و {m} دقيقة و {s} ثانية" if h else f"{m} دقيقة و {s} ثانية"
+            text = f"🔕 المستخدم غير نشط منذ {elapsed_str}\n💬 السبب: {sleep_reason}"
 
-    await event.reply(text)  # ما نستخدم حذف
+        await event.reply(text)
+
+    asyncio.create_task(reply_now())  # سريع وما يعلق
 
 @client.on(events.NewMessage(outgoing=True))
 async def cancel_sleep(event):
@@ -141,7 +146,16 @@ async def cancel_sleep(event):
     sleep_start = None
     custom_reply = ""
 
-    await event.respond("❌ تم إلغاء السكون.")  # تبقى الرسالة
+    msg = await event.respond("❌ تم إلغاء السكون.")
+    asyncio.create_task(delete_after(msg, 2))
+
+# حذف تلقائي لأي رسالة بعد وقت
+async def delete_after(msg, seconds):
+    await asyncio.sleep(seconds)
+    try:
+        await msg.delete()
+    except:
+        pass
 # ─────────── الكتم ───────────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def cmd_mute(event):
