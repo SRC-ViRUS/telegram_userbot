@@ -69,12 +69,22 @@ async def sleep_command(event):
     custom_reply = ""
     replied_ids.clear()
 
-    await event.delete()
-    m = await event.respond(f"""🟡 <b>تم تفعيل وضع السليب</b>
+    try:
+        await event.delete()
+    except Exception as e:
+        print(f"خطأ في حذف رسالة تفعيل السليب: {e}")
+
+    try:
+        m = await event.respond(f"""🟡 <b>تم تفعيل وضع السليب</b>
 💬 <b>السبب:</b> {sleep_reason}
 ⏱️ <b>منذ:</b> 0 دقيقة و 0 ثانية""", parse_mode="html")
-    await asyncio.sleep(2)
-    await m.delete()
+        await asyncio.sleep(2)
+        try:
+            await m.delete()
+        except Exception as e:
+            print(f"خطأ في حذف رسالة الرد على السليب: {e}")
+    except Exception as e:
+        print(f"خطأ في الرد على أمر السليب: {e}")
 
 @client.on(events.NewMessage(pattern=r'^\.سكون(?: (.+))?$'))
 async def static_sleep_command(event):
@@ -89,10 +99,20 @@ async def static_sleep_command(event):
     sleep_start = datetime.datetime.now()
     replied_ids.clear()
 
-    await event.delete()
-    m = await event.respond("🔕 تم تفعيل السكون برسالة ثابتة.")
-    await asyncio.sleep(2)
-    await m.delete()
+    try:
+        await event.delete()
+    except Exception as e:
+        print(f"خطأ في حذف رسالة تفعيل السكون: {e}")
+
+    try:
+        m = await event.respond("🔕 تم تفعيل السكون برسالة ثابتة.")
+        await asyncio.sleep(2)
+        try:
+            await m.delete()
+        except Exception as e:
+            print(f"خطأ في حذف رسالة الرد على السكون: {e}")
+    except Exception as e:
+        print(f"خطأ في الرد على أمر السكون: {e}")
 
 @client.on(events.NewMessage(incoming=True))
 async def on_private_message(event):
@@ -118,9 +138,15 @@ async def on_private_message(event):
         elapsed_str = f"{h} ساعة و {m} دقيقة و {s} ثانية" if h else f"{m} دقيقة و {s} ثانية"
         text = f"🔕 المستخدم غير نشط منذ {elapsed_str}\n💬 السبب: {sleep_reason}"
 
-    r = await event.reply(text)
-    await asyncio.sleep(3)
-    await r.delete()
+    try:
+        r = await event.reply(text)
+        await asyncio.sleep(3)
+        try:
+            await r.delete()
+        except Exception as e:
+            print(f"خطأ في حذف رسالة الرد التلقائي: {e}")
+    except Exception as e:
+        print(f"خطأ في الرد على رسالة خاصة: {e}")
 
 @client.on(events.NewMessage(outgoing=True))
 async def cancel_sleep(event):
@@ -138,10 +164,13 @@ async def cancel_sleep(event):
     m, s = divmod(rem, 60)
     elapsed_str = f"{h} ساعة و {m} دقيقة و {s} ثانية" if h else f"{m} دقيقة و {s} ثانية"
 
-    await client.send_message("me", f"""🔔 <b>تم إلغاء وضع السكون</b>
+    try:
+        await client.send_message("me", f"""🔔 <b>تم إلغاء وضع السكون</b>
 📝 <b>السبب:</b> {sleep_reason}
 ⏱️ <b>استمر:</b> {elapsed_str}
 👤 <b>تم الإلغاء بإرسال رسالة.</b>""", parse_mode="html")
+    except Exception as e:
+        print(f"خطأ في إرسال رسالة إلغاء السكون: {e}")
 
     sleep_mode = False
     sleep_reason = ""
@@ -149,9 +178,15 @@ async def cancel_sleep(event):
     custom_reply = ""
     replied_ids.clear()
 
-    m = await event.respond("❌ تم إلغاء السكون.")
-    await asyncio.sleep(2)
-    await m.delete() 
+    try:
+        m = await event.respond("❌ تم إلغاء السكون.")
+        await asyncio.sleep(2)
+        try:
+            await m.delete()
+        except Exception as e:
+            print(f"خطأ في حذف رسالة إلغاء السكون: {e}")
+    except Exception as e:
+        print(f"خطأ في الرد على رسالة إلغاء السكون: {e}")
 # ─────────── الكتم ───────────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def cmd_mute(event):
