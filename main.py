@@ -46,8 +46,14 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
         tmp = await client.download_media(media, file=tempfile.mktemp())
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
         os.remove(tmp)
-        #_______ازعاج ايموجي ________
-       sleep_mode = False
+        #_______ازعاج ايموجي ________from telethon import TelegramClient, events
+import asyncio
+import datetime
+
+# تعريف client هنا
+# client = TelegramClient("session_name", api_id, api_hash)
+
+sleep_mode = False
 sleep_reason = ""
 sleep_start = None
 custom_reply = ""
@@ -72,7 +78,7 @@ async def sleep_command(event):
     try:
         await event.delete()
     except Exception as e:
-        print(f"خطأ في حذف رسالة تفعيل السليب: {e}")
+        print(f"خطأ حذف رسالة تفعيل السليب: {e}")
 
     try:
         m = await event.respond(f"""🟡 <b>تم تفعيل وضع السليب</b>
@@ -82,7 +88,7 @@ async def sleep_command(event):
         try:
             await m.delete()
         except Exception as e:
-            print(f"خطأ في حذف رسالة الرد على السليب: {e}")
+            print(f"خطأ حذف رسالة الرد على السليب: {e}")
     except Exception as e:
         print(f"خطأ في الرد على أمر السليب: {e}")
 
@@ -102,7 +108,7 @@ async def static_sleep_command(event):
     try:
         await event.delete()
     except Exception as e:
-        print(f"خطأ في حذف رسالة تفعيل السكون: {e}")
+        print(f"خطأ حذف رسالة تفعيل السكون: {e}")
 
     try:
         m = await event.respond("🔕 تم تفعيل السكون برسالة ثابتة.")
@@ -110,7 +116,7 @@ async def static_sleep_command(event):
         try:
             await m.delete()
         except Exception as e:
-            print(f"خطأ في حذف رسالة الرد على السكون: {e}")
+            print(f"خطأ حذف رسالة الرد على السكون: {e}")
     except Exception as e:
         print(f"خطأ في الرد على أمر السكون: {e}")
 
@@ -144,9 +150,9 @@ async def on_private_message(event):
         try:
             await r.delete()
         except Exception as e:
-            print(f"خطأ في حذف رسالة الرد التلقائي: {e}")
+            print(f"خطأ حذف رسالة الرد التلقائي: {e}")
     except Exception as e:
-        print(f"خطأ في الرد على رسالة خاصة: {e}")
+        print(f"خطأ الرد على رسالة خاصة: {e}")
 
 @client.on(events.NewMessage(outgoing=True))
 async def cancel_sleep(event):
@@ -170,7 +176,7 @@ async def cancel_sleep(event):
 ⏱️ <b>استمر:</b> {elapsed_str}
 👤 <b>تم الإلغاء بإرسال رسالة.</b>""", parse_mode="html")
     except Exception as e:
-        print(f"خطأ في إرسال رسالة إلغاء السكون: {e}")
+        print(f"خطأ إرسال رسالة إلغاء السكون: {e}")
 
     sleep_mode = False
     sleep_reason = ""
@@ -184,9 +190,9 @@ async def cancel_sleep(event):
         try:
             await m.delete()
         except Exception as e:
-            print(f"خطأ في حذف رسالة إلغاء السكون: {e}")
+            print(f"خطأ حذف رسالة إلغاء السكون: {e}")
     except Exception as e:
-        print(f"خطأ في الرد على رسالة إلغاء السكون: {e}")
+        print(f"خطأ الرد على رسالة إلغاء السكون: {e}")
 # ─────────── الكتم ───────────
 @client.on(events.NewMessage(pattern=r"^\.كتم$", func=lambda e: e.is_reply))
 async def cmd_mute(event):
