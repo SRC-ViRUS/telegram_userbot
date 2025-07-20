@@ -122,27 +122,34 @@ from telethon import events, functions, types
 
 reaction_map = {}  # user_id: emoji
 
-# أمر التفعيل: .ازعاج😁 ← مع إيموجي تختاره مباشرة بدون فراغ
 @client.on(events.NewMessage(pattern=r"^\.ازعاج(.+)"))
 async def enable_reaction(event):
     if not event.is_reply:
         await event.reply("❗ لازم ترد على رسالة الشخص وتكتب الأمر مع الإيموجي\nمثال: `.ازعاج😁`", delete_in=5)
         return
 
-    emoji = event.pattern_match.group(1).strip()  # الإيموجي بدون فراغ
+    try:
+        await event.delete()  # حذف رسالة الأمر فوراً
+    except:
+        pass
+
+    emoji = event.pattern_match.group(1).strip()
     replied = await event.get_reply_message()
     user_id = replied.sender_id
 
     reaction_map[user_id] = emoji
     await event.reply(f"✅ تم تفعيل الإزعاج بـ {emoji} لهذا المستخدم.", delete_in=3)
-    await event.delete()  # حذف رسالة الأمر
 
-# أمر الإيقاف: .لاتزعج فقط (بدون إيموجي)
 @client.on(events.NewMessage(pattern=r"^\.لاتزعج$"))
 async def disable_reaction(event):
     if not event.is_reply:
         await event.reply("❗ لازم ترد على رسالة الشخص حتى أوقف التفاعل.", delete_in=5)
         return
+
+    try:
+        await event.delete()  # حذف رسالة الأمر فوراً
+    except:
+        pass
 
     replied = await event.get_reply_message()
     user_id = replied.sender_id
@@ -152,9 +159,7 @@ async def disable_reaction(event):
         await event.reply("🛑 تم إيقاف الإزعاج لهذا الشخص.", delete_in=3)
     else:
         await event.reply("ℹ️ هذا الشخص ما مفعّل عليه إزعاج.", delete_in=3)
-    await event.delete()  # حذف رسالة الأمر
 
-# تنفيذ التفاعل التلقائي
 @client.on(events.NewMessage)
 async def auto_reaction(event):
     sender = await event.get_sender()
