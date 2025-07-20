@@ -116,7 +116,84 @@ async def auto_forward(event):
 
     except Exception as err:
         print(f"⚠️ خطأ عام: {err}")
-     
+#_____________امر تجربه___________
+from telethon.tl.functions.users import GetFullUser
+import asyncio
+import random
+
+@client.on(events.NewMessage(pattern=r'^\.تهكير(?: (.+))?'))
+async def ultra_scary_hack(event):
+    target = event.pattern_match.group(1)
+
+    if event.is_reply and not target:
+        replied = await event.get_reply_message()
+        if replied.sender:
+            full = await client(GetFullUser(replied.sender_id))
+            first_name = full.user.first_name or "شخص"
+            username = f"@{full.user.username}" if full.user.username else first_name
+            target = username
+        else:
+            target = "مجهول"
+
+    if not target:
+        return await event.reply("❌ رد على شخص أو اكتب يوزره.\nمثال: `.تهكير @user`")
+
+    fake_ip = ".".join(str(random.randint(10, 255)) for _ in range(4))
+    fake_country = random.choice(["الولايات المتحدة الأمريكية 🇺🇸", "روسيا 🇷🇺", "كوريا الشمالية 🇰🇵", "الصين 🇨🇳", "إيران 🇮🇷"])
+    fake_phone = "+9647" + "".join(str(random.randint(0, 9)) for _ in range(8))
+
+    scary_codes = [
+        "┏━[ SYSTEM BREACH INITIATED ]━┓",
+        "┣▶ اتصال بالخوادم السرية...",
+        f"┣▶ IP الهدف: {fake_ip}",
+        f"┣▶ الموقع الجغرافي: {fake_country}",
+        "┣▶ تجاوز جدران الحماية...",
+        "┣▶ كسر تشفير 4096 بت RSA...",
+        "┣▶ تنزيل ملفات سرية...",
+        "┣▶ حقن برمجيات تجسس متقدمة...",
+        "┣▶ استخراج كلمات المرور من المتصفح...",
+        "┣▶ الدخول إلى الكاميرا والميكروفون...",
+        "┣▶ بث مباشر لحركات المستخدم...",
+        "┣▶ تحميل قاعدة بيانات الحساب...",
+        "┗━[ BREACH COMPLETE ]━┛"
+    ]
+
+    try:
+        msg = event.message
+
+        await msg.edit(f"💀 بدء تهكير {target} ...\n")
+        await asyncio.sleep(2)
+
+        for line in scary_codes:
+            await msg.edit(f"<pre>{line}</pre>", parse_mode="html")
+            await asyncio.sleep(2)
+
+        await msg.edit("⚠️ <b>تم تهكير الحساب بنجاح</b> ⚠️\n")
+        await asyncio.sleep(1.5)
+        await msg.edit("⏳ جاري سحب الصور ...")
+        await asyncio.sleep(2)
+        await msg.edit("✅ تم سحب الصور")
+        await asyncio.sleep(1.5)
+        await msg.edit("⏳ جاري سحب جميع معلومات الجهاز ...")
+        await asyncio.sleep(2)
+        await msg.edit("✅ تم سحب جميع معلومات الجهاز")
+        await asyncio.sleep(1.5)
+        await msg.edit("⏳ جاري نشر الصور ...")
+        await asyncio.sleep(2)
+        await msg.edit("✅ تم نشر الصور")
+        await asyncio.sleep(1.5)
+
+        fake_link = "http://darkweb-secret-site.onion/fake-leak"
+        await msg.edit(f"🚨 جاري رفع الصور إلى الموقع التالي:\n<a href='{fake_link}'>{fake_link}</a>", parse_mode="html", link_preview=False)
+        await asyncio.sleep(3)
+
+        await msg.edit("🔥 جارييييي فرمتتت التلفون ...")
+        await asyncio.sleep(5)
+
+        await msg.delete()
+
+    except Exception as e:
+        print("خطأ في التهكير:", e)
 #_______ازعاج ايموجي ________from telethon import TelegramClient, events
 from telethon import events, functions, types
 
