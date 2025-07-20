@@ -125,6 +125,8 @@ reaction_map = {}  # user_id: emoji
 # أمر التفعيل: .ازعاج😁 ← مع إيموجي تختاره مباشرة بدون فراغ
 @client.on(events.NewMessage(pattern=r"^\.ازعاج(.+)"))
 async def enable_reaction(event):
+    await event.delete()  # حذف رسالة الأمر فور استلامها
+
     if not event.is_reply:
         await event.reply("❗ لازم ترد على رسالة الشخص وتكتب الأمر مع الإيموجي\nمثال: `.ازعاج😁`", delete_in=5)
         return
@@ -135,11 +137,12 @@ async def enable_reaction(event):
 
     reaction_map[user_id] = emoji
     await event.reply(f"✅ تم تفعيل الإزعاج بـ {emoji} لهذا المستخدم.", delete_in=3)
-    await event.delete()  # حذف رسالة الأمر
 
 # أمر الإيقاف: .لاتزعج فقط (بدون إيموجي)
 @client.on(events.NewMessage(pattern=r"^\.لاتزعج$"))
 async def disable_reaction(event):
+    await event.delete()  # حذف رسالة الأمر فور استلامها
+
     if not event.is_reply:
         await event.reply("❗ لازم ترد على رسالة الشخص حتى أوقف التفاعل.", delete_in=5)
         return
@@ -152,7 +155,6 @@ async def disable_reaction(event):
         await event.reply("🛑 تم إيقاف الإزعاج لهذا الشخص.", delete_in=3)
     else:
         await event.reply("ℹ️ هذا الشخص ما مفعّل عليه إزعاج.", delete_in=3)
-    await event.delete()  # حذف رسالة الأمر
 
 # تنفيذ التفاعل التلقائي
 @client.on(events.NewMessage)
