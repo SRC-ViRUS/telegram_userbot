@@ -45,7 +45,7 @@ async def send_media_safe(dest, media, caption=None, ttl=None):
     except FileReferenceExpiredError:
         tmp = await client.download_media(media, file=tempfile.mktemp())
         await client.send_file(dest, tmp, caption=caption, ttl=ttl)
-        os.remove(tmp)")
+        os.remove(tmp)
 #_____________امر تجربه___________
 import asyncio
 import random
