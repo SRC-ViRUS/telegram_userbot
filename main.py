@@ -6,12 +6,13 @@
 """
 
 import os, asyncio, datetime, random, tempfile
-from telethon import TelegramClient, events, utils
+from telethon import TelegramClient, events, utils, types
 from telethon.sessions import StringSession
 from telethon.errors import FileReferenceExpiredError
 from telethon.tl.functions.account import UpdateProfileRequest
 from telethon.tl.functions.photos import GetUserPhotosRequest
 from telethon.tl.functions.channels import EditTitleRequest
+from utils import get_dialog_counts, estimate_creation_date
 
 # ─────────── بيانات الاتصال ───────────
 api_id = 22494292
@@ -818,144 +819,61 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
+@client.on(events.NewMessage(pattern=r'^\.معلومات(?:\s+(.*))?$'))
 async def user_info(event):
     if not await is_owner(event):
         return
-
-    target = event.pattern_match.group(1)
-    reply = await event.get_reply_message() if event.is_reply else None
-
-    if target:
+    try:
         try:
-            user = await client.get_entity(target)
-        except:
-            return await event.reply("❌ لم أتمكن من جلب المستخدم.")
-    elif reply:
-        user = await reply.get_sender()
-    else:
-        user = await client.get_me()
-
-    if not user:
-        return await event.reply("❌ المستخدم غير متاح.")
-
-    full = await client(GetUserPhotosRequest(user.id, 0, 0, 1))
-    profile_photos = len(full.photos)
-
-    out = f"""
-👤 <b>الاسم:</b> {utils.get_display_name(user)}
-🆔 <b>ID:</b> <code>{user.id}</code>
-🔗 <b>Username:</b> @{user.username if user.username else '—'}
-📸 <b>عدد الصور:</b> {profile_photos}
-"""
-
-    if user.bot:
-        out += "🤖 <b>هذا حساب بوت</b>"
-    elif user.deleted:
-        out += "⚠️ <b>هذا الحساب محذوف</b>"
-    else:
-        try:
-            status = user.status.__class__.__name__
-            if status == "UserStatusOnline":
-                out += "🟢 <b>الحالة:</b> متصل الآن"
-            elif status == "UserStatusOffline":
-                offline = user.status.was_online.strftime("%Y-%m-%d %H:%M")
-                out += f"🔴 <b>آخر ظهور:</b> {offline}"
-            else:
-                out += "⚪ <b>الحالة:</b> غير معروفة"
-        except:
+            await event.delete()
+        except Exception:
             pass
 
-    await event.reply(out, parse_mode="html")
-print("📩 دخل أمر معلومات")
-
-
-
-@client.on(events.NewMessage(pattern=r'^\.معلومات(?: (.+))?$'))
-async def user_info(event):
-    if not await is_owner(event):
-        return await event.reply("🚫 مو انت صاحب البوت.")
-    try:
-        await event.reply("🚀 بدأ تنفيذ أمر المعلومات...")
-
         target = event.pattern_match.group(1)
-        reply = await event.get_reply_message() if event.is_reply else None
-
         if target:
             try:
-                user = await client.get_entity(target)
-            except:
-                return await event.reply("❌ لم أتمكن من جلب المستخدم.")
-        elif reply:
+                user = await client.get_entity(target.strip())
+            except Exception:
+                return await event.respond("❌ لم أستطع جلب الحساب.")
+        elif event.is_reply:
+            reply = await event.get_reply_message()
             user = await reply.get_sender()
         else:
             user = await client.get_me()
 
-        is_self = (user.id == (await client.get_me()).id)
+        me = await client.get_me()
+        info_lines = [
+            f"👤 <b>الاسم الكامل:</b> {utils.get_display_name(user)}",
+            f"🆔 <b>ID:</b> <code>{user.id}</code>",
+            f"🔗 <b>Username:</b> {('@' + user.username) if user.username else 'غير محدد'}",
+            f"📞 <b>الرقم:</b> {getattr(user, 'phone', None) or 'غير متوفر'}",
+        ]
 
-        full = await client(GetUserPhotosRequest(user.id, 0, 0, 1))
-        profile_photos = len(full.photos)
-        out = f"""
-👤 <b>الاسم:</b> {utils.get_display_name(user)}
-🆔 <b>ID:</b> <code>{user.id}</code>
-🔗 <b>Username:</b> @{user.username if user.username else '—'}
-📸 <b>عدد الصور:</b> {profile_photos}
-🤖 <b>النوع:</b> {"بوت" if user.bot else "محذوف" if user.deleted else "عادي"}
-🌍 <b>اللغة:</b> {getattr(user, 'lang_code', '❔')}
-"""
+        if user.id == me.id:
+            groups, channels = await get_dialog_counts(client)
+            info_lines.append(f"👥 <b>عدد المجموعات:</b> {groups}")
+            info_lines.append(f"📢 <b>عدد القنوات:</b> {channels}")
 
-        if user.id == (await client.get_me()).id:
-            out += "🧠 <b>معلومات إضافية (عن حسابك):</b>\n"
-            try:
-                from telethon.tl.functions.contacts import GetContactsRequest
-                contacts = await client(GetContactsRequest())
-                out += f"📇 <b>جهات الاتصال:</b> {len(contacts.users)}\n"
-            except: pass
+        last_seen = "غير متوفر"
+        try:
+            if isinstance(user.status, types.UserStatusOnline):
+                last_seen = "متصل الآن"
+            elif isinstance(user.status, types.UserStatusOffline):
+                last_seen = user.status.was_online.strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            pass
+        info_lines.append(f"⏱️ <b>آخر ظهور:</b> {last_seen}")
 
-            try:
-                from telethon.tl.functions.account import GetAuthorizationsRequest
-                auth = await client(GetAuthorizationsRequest())
-                out += f"🔐 <b>جلسات الدخول:</b> {len(auth.authorizations)}\n"
-            except: pass
+        creation = estimate_creation_date(user.id)
+        info_lines.append(
+            f"📅 <b>تاريخ الإنشاء التقريبي:</b> {creation.strftime('%Y-%m-%d')}"
+        )
 
-            dialogs = await client.get_dialogs()
-            channels = []
-            groups = []
-
-            for dialog in dialogs:
-                if dialog.is_channel:
-                    if dialog.entity.broadcast:
-                        channels.append(dialog)
-                    else:
-                        groups.append(dialog)
-
-            out += f"\n📢 <b>قنواتك:</b> {len(channels)}\n"
-            for ch in channels[:10]:
-                name = ch.name
-                username = getattr(ch.entity, 'username', None)
-                out += f"  • {name}: {'@' + username if username else '[خاص]'}\n"
-
-            out += f"\n👥 <b>مجموعاتك:</b> {len(groups)}\n"
-            for gp in groups[:10]:
-                name = gp.name
-                username = getattr(gp.entity, 'username', None)
-                out += f"  • {name}: {'@' + username if username else '[خاص]'}\n"
-
-        else:
-            try:
-                status = user.status.__class__.__name__
-                if status == "UserStatusOnline":
-                    out += "🟢 <b>الحالة:</b> متصل الآن"
-                elif status == "UserStatusOffline":
-                    offline = user.status.was_online.strftime("%Y-%m-%d %H:%M")
-                    out += f"🔴 <b>آخر ظهور:</b> {offline}"
-                else:
-                    out += "⚪ <b>الحالة:</b> غير معروفة"
-            except:
-                pass
-
-        await event.reply(out, parse_mode="html")
+        await event.respond("\n".join(info_lines), parse_mode="html")
     except Exception as e:
-        await event.reply(f"❌ خطأ في أمر معلومات: {str(e)}")
+        await event.respond(f"❌ خطأ في أمر معلومات: {e}")
 
 
 
