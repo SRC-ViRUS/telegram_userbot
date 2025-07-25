@@ -12,7 +12,6 @@ from telethon.errors import FileReferenceExpiredError
 from telethon.tl.functions.account import UpdateProfileRequest
 from telethon.tl.functions.photos import GetUserPhotosRequest
 from telethon.tl.functions.channels import EditTitleRequest
-
 # ─────────── بيانات الاتصال ───────────
 api_id = 22494292
 api_hash = "0bd3915b6b1a0a64b168d0cc852a0e61"
