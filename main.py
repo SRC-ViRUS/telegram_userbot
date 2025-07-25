@@ -816,60 +816,6 @@ async def main():
 
     await client.run_until_disconnected()
 
-if __name__ == "__main__":
-    asyncio.run(main())
-async def user_info(event):
-    if not await is_owner(event):
-        return
-
-    target = event.pattern_match.group(1)
-    reply = await event.get_reply_message() if event.is_reply else None
-
-    if target:
-        try:
-            user = await client.get_entity(target)
-        except:
-            return await event.reply("❌ لم أتمكن من جلب المستخدم.")
-    elif reply:
-        user = await reply.get_sender()
-    else:
-        user = await client.get_me()
-
-    if not user:
-        return await event.reply("❌ المستخدم غير متاح.")
-
-    full = await client(GetUserPhotosRequest(user.id, 0, 0, 1))
-    profile_photos = len(full.photos)
-
-    out = f"""
-👤 <b>الاسم:</b> {utils.get_display_name(user)}
-🆔 <b>ID:</b> <code>{user.id}</code>
-🔗 <b>Username:</b> @{user.username if user.username else '—'}
-📸 <b>عدد الصور:</b> {profile_photos}
-"""
-
-    if user.bot:
-        out += "🤖 <b>هذا حساب بوت</b>"
-    elif user.deleted:
-        out += "⚠️ <b>هذا الحساب محذوف</b>"
-    else:
-        try:
-            status = user.status.__class__.__name__
-            if status == "UserStatusOnline":
-                out += "🟢 <b>الحالة:</b> متصل الآن"
-            elif status == "UserStatusOffline":
-                offline = user.status.was_online.strftime("%Y-%m-%d %H:%M")
-                out += f"🔴 <b>آخر ظهور:</b> {offline}"
-            else:
-                out += "⚪ <b>الحالة:</b> غير معروفة"
-        except:
-            pass
-
-    await event.reply(out, parse_mode="html")
-print("📩 دخل أمر معلومات")
-
-
-
 @client.on(events.NewMessage(pattern=r'^\.معلومات(?: (.+))?$'))
 async def user_info(event):
     if not await is_owner(event):
@@ -971,3 +917,6 @@ async def leave_group(event):
         await client(functions.channels.LeaveChannelRequest(chat.id))
     except Exception as e:
         await event.reply(f"❌ فشل المغادرة: {str(e)}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
