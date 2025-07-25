@@ -318,7 +318,7 @@ async def cmd_mute(event):
     (muted_private if event.is_private else muted_groups.setdefault(event.chat_id,set())).add(r.sender_id)
     await qedit(event,"🔇 تم كتمه.")
 
-@client.on(events.NewMessage(pattern=r"^\.الغاء الكتم$", func=lambda e: e.is_reply))
+@client.on(events.NewMessage(pattern=r"^\.إلغاء الكتم$", func=lambda e: e.is_reply))
 async def cmd_unmute(event):
     if not await is_owner(event): return
     r = await event.get_reply_message()
@@ -760,7 +760,7 @@ async def cmds(event):
 ↳ عرض حالة المنشن (مفعل ✅ / معطل 🛑)
 
 <code>.كتم</code> (رد) – كتم
-<code>.الغاء الكتم</code> (رد) – فك كتم
+<code>.إلغاء الكتم</code> (رد) – فك كتم
 <code>.قائمة الكتم</code> – عرض الكتم
 <code>.مسح الكتم</code> – مسح الكتم
 اوامر الازعاج:
