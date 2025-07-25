@@ -817,9 +817,6 @@ async def main():
 
     await client.run_until_disconnected()
 
-if __name__ == "__main__":
-    asyncio.run(main())
-
 
 @client.on(events.NewMessage(pattern=r'^\.معلومات(?:\s+(.*))?$'))
 async def user_info(event):
@@ -889,3 +886,6 @@ async def leave_group(event):
         await client(functions.channels.LeaveChannelRequest(chat.id))
     except Exception as e:
         await event.reply(f"❌ فشل المغادرة: {str(e)}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
