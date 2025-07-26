@@ -12,7 +12,7 @@ from telethon.errors import FileReferenceExpiredError
 from telethon.tl.functions.account import UpdateProfileRequest
 from telethon.tl.functions.photos import GetUserPhotosRequest
 from telethon.tl.functions.channels import EditTitleRequest
-from utils import get_dialog_counts, estimate_creation_date
+from utils import get_dialog_counts, estimate_creation_date, load_json, save_json
 from fingerprints import register as register_fingerprints
 
 # ─────────── بيانات الاتصال ───────────
@@ -24,10 +24,23 @@ os.makedirs("downloads", exist_ok=True)
 register_fingerprints(client)
 
 # ─────────── متغيّرات ───────────
-muted_private, muted_groups = set(), {}
-imitate_targets, last_imitated = set(), {}
+STATE_FILE = "state.json"
+_state = load_json(STATE_FILE, {})
+muted_private = set(_state.get("muted_private", []))
+muted_groups = {int(k): set(v) for k, v in _state.get("muted_groups", {}).items()}
+reaction_map = _state.get("reaction_map", {})  # user_id -> emoji
+imitate_targets, last_imitated = set(_state.get("imitate_targets", [])), {}
 welcome_cfg, group_name_tasks, original_titles = {}, {}, {}
 name_task, prev_name, repeat_task = None, None, None
+
+def save_state():
+    data = {
+        "muted_private": list(muted_private),
+        "muted_groups": {str(k): list(v) for k, v in muted_groups.items()},
+        "reaction_map": reaction_map,
+        "imitate_targets": list(imitate_targets),
+    }
+    save_json(STATE_FILE, data)
 
 # ─────────── مساعدات ───────────
 def baghdad_time(fmt="%I:%M %p"):
@@ -150,8 +163,6 @@ async def ultra_long_scary_hack(event):
 #_______ازعاج ايموجي ________from telethon import TelegramClient, events
 from telethon import events, functions, types
 
-reaction_map = {}  # user_id: emoji
-
 @client.on(events.NewMessage(pattern=r"^\.ازعاج(.+)"))
 async def enable_reaction(event):
     if not event.is_reply:
@@ -167,7 +178,8 @@ async def enable_reaction(event):
     replied = await event.get_reply_message()
     user_id = replied.sender_id
 
-    reaction_map[user_id] = emoji
+    reaction_map[str(user_id)] = emoji
+    save_state()
     await event.reply(f"✅ تم تفعيل الإزعاج بـ {emoji} لهذا المستخدم.", delete_in=3)
 
 @client.on(events.NewMessage(pattern=r"^\.لاتزعج$"))
@@ -184,16 +196,19 @@ async def disable_reaction(event):
     replied = await event.get_reply_message()
     user_id = replied.sender_id
 
-    if user_id in reaction_map:
-        del reaction_map[user_id]
+    if str(user_id) in reaction_map:
+        del reaction_map[str(user_id)]
+        save_state()
         await event.reply("🛑 تم إيقاف الإزعاج لهذا الشخص.", delete_in=3)
     else:
         await event.reply("ℹ️ هذا الشخص ما مفعّل عليه إزعاج.", delete_in=3)
 
 @client.on(events.NewMessage)
 async def auto_reaction(event):
+    if event.outgoing:
+        return
     sender = await event.get_sender()
-    emoji = reaction_map.get(sender.id)
+    emoji = reaction_map.get(str(sender.id))
     if emoji:
         try:
             await client(functions.messages.SendReactionRequest(
@@ -318,6 +333,7 @@ async def cmd_mute(event):
     if not await is_owner(event): return
     r = await event.get_reply_message()
     (muted_private if event.is_private else muted_groups.setdefault(event.chat_id,set())).add(r.sender_id)
+    save_state()
     await qedit(event,"🔇 تم كتمه.")
 
 @client.on(events.NewMessage(pattern=r"^\.إلغاء الكتم$", func=lambda e: e.is_reply))
@@ -325,6 +341,7 @@ async def cmd_unmute(event):
     if not await is_owner(event): return
     r = await event.get_reply_message()
     (muted_private if event.is_private else muted_groups.get(event.chat_id,set())).discard(r.sender_id)
+    save_state()
     await qedit(event,"🔊 تم فك الكتم.")
 
 @client.on(events.NewMessage(pattern=r"^\.قائمة الكتم$"))
@@ -340,6 +357,7 @@ async def cmd_mlist(event):
 async def cmd_mclear(event):
     if not await is_owner(event): return
     muted_private.clear(); muted_groups.clear()
+    save_state()
     await qedit(event,"🗑️ تم المسح.")
 
 @client.on(events.NewMessage(incoming=True))
@@ -354,12 +372,14 @@ async def cmd_imitate_on(event):
     if not await is_owner(event): return
     r=await event.get_reply_message()
     imitate_targets.add(r.sender_id); last_imitated.pop(r.sender_id,None)
+    save_state()
     await qedit(event,f"✅ تفعيل التقليد لـ {r.sender_id}")
 
 @client.on(events.NewMessage(pattern=r"^\.ايقاف التقليد$"))
 async def cmd_imitate_off(event):
     if not await is_owner(event): return
     imitate_targets.clear(); last_imitated.clear()
+    save_state()
     await qedit(event,"🛑 تم إيقاف التقليد.")
 
 @client.on(events.NewMessage(incoming=True))
@@ -869,6 +889,7 @@ async def convert_media(event):
     if not reply.media:
         return await event.reply("↯︙الرسالة لا تحتوي ميديا.")
 
+    msg = await event.reply("⏳ جارٍ التحويل ...")
     src = await reply.download_media(file=tempfile.mktemp())
     dst = tempfile.mktemp()
 
@@ -896,9 +917,10 @@ async def convert_media(event):
             await client.send_file(event.chat_id, dst_file, voice_note=True)
         else:
             await client.send_file(event.chat_id, dst_file)
+        await msg.edit("✅ تم التحويل")
         await event.delete()
     except Exception as e:
-        await event.reply(f"❌ خطأ في التحويل: {e}")
+        await msg.edit(f"❌ خطأ في التحويل: {e}")
     finally:
         try:
             os.remove(src)
