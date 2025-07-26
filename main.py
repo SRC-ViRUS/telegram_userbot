@@ -206,7 +206,7 @@ async def disable_reaction(event):
 
 @client.on(events.NewMessage)
 async def auto_reaction(event):
-    if event.outgoing:
+    if event.out:
         return
     sender = await event.get_sender()
     emoji = reaction_map.get(str(sender.id))
