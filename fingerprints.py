@@ -1,6 +1,8 @@
 import json
 import os
 from telethon import events
+from telethon.errors import FileReferenceExpiredError
+from utils import send_media_safe
 
 FINGERPRINTS_FILE = "fingerprints.json"
 MAX_FINGERPRINTS = 200
@@ -10,8 +12,18 @@ def load_fingerprints():
     if not os.path.exists(FINGERPRINTS_FILE):
         return {}
     try:
-        with open(FINGERPRINTS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        with open(FINGERPRINTS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        # migrate old structure {chat_id: {name: id}}
+        if data and all(isinstance(v, dict) for v in data.values()):
+            first = next(iter(data.values()))
+            if first and isinstance(next(iter(first.values()), None), int):
+                migrated = {}
+                for chat, vals in data.items():
+                    for n, i in vals.items():
+                        migrated[n] = {"chat": int(chat), "id": i}
+                data = migrated
+        return data
     except Exception:
         return {}
 
@@ -30,33 +42,34 @@ def register(client):
         reply = await event.get_reply_message()
         if not reply:
             return await event.reply("↯︙رد على الرسالة اللي تريد تحفظها كبصمة.")
-        chat_id = str(event.chat_id)
-        if chat_id not in fingerprints:
-            fingerprints[chat_id] = {}
-        if len(fingerprints[chat_id]) >= MAX_FINGERPRINTS:
+        if len(fingerprints) >= MAX_FINGERPRINTS:
             return await event.reply(
                 f"↯︙وصلت الحد الأقصى ({MAX_FINGERPRINTS}) من البصمات.")
-        fingerprints[chat_id][name] = reply.id
+        fingerprints[name] = {"chat": reply.chat_id, "id": reply.id}
         save_fingerprints(fingerprints)
         await event.reply(f"↯︙تم حفظ البصمة باسم `{name}`.")
 
-    @client.on(events.NewMessage(pattern=r'^\.بصمه (.+)$'))
+    @client.on(events.NewMessage(pattern=r'^\.(?:بصمه|اسم البصمه) (.+)$'))
     async def send_fingerprint(event):
         name = event.pattern_match.group(1).strip()
-        chat_id = str(event.chat_id)
-        if chat_id not in fingerprints or name not in fingerprints[chat_id]:
+        if name not in fingerprints:
             return await event.reply(f"↯︙لا توجد بصمة بهذا الاسم: `{name}`.")
+        data = fingerprints[name]
         try:
-            msg_id = fingerprints[chat_id][name]
-            msg = await client.get_messages(chat_id, ids=msg_id)
-            await msg.forward_to(event.chat_id)
+            msg = await client.get_messages(data["chat"], ids=data["id"])
+            if msg.media:
+                try:
+                    await msg.forward_to(event.chat_id)
+                except FileReferenceExpiredError:
+                    await send_media_safe(client, event.chat_id, msg.media, caption=msg.message or None)
+            else:
+                await event.reply(msg.message or "")
         except Exception:
             await event.reply("↯︙فشل إرسال البصمة. قد تكون محذوفة.")
 
     @client.on(events.NewMessage(pattern=r'^\.بصماتي$'))
     async def list_fingerprints(event):
-        chat_id = str(event.chat_id)
-        names = list(fingerprints.get(chat_id, {}).keys())
+        names = list(fingerprints.keys())
         if not names:
             return await event.reply("↯︙لا توجد أي بصمات محفوظة.")
         text = "↯︙قائمة بصماتك:\n" + "\n".join(f"• {n}" for n in names)
@@ -65,9 +78,8 @@ def register(client):
     @client.on(events.NewMessage(pattern=r'^\.احذف بصمه (.+)$'))
     async def delete_fingerprint(event):
         name = event.pattern_match.group(1).strip()
-        chat_id = str(event.chat_id)
-        if chat_id in fingerprints and name in fingerprints[chat_id]:
-            del fingerprints[chat_id][name]
+        if name in fingerprints:
+            del fingerprints[name]
             save_fingerprints(fingerprints)
             await event.reply(f"↯︙تم حذف البصمة `{name}`.")
         else:
@@ -75,8 +87,7 @@ def register(client):
 
     @client.on(events.NewMessage(pattern=r'^\.عدد البصمات$'))
     async def fingerprint_count(event):
-        chat_id = str(event.chat_id)
-        count = len(fingerprints.get(chat_id, {}))
+        count = len(fingerprints)
         await event.reply(f"↯︙عدد البصمات المحفوظة: {count}/{MAX_FINGERPRINTS}")
 
     @client.on(events.NewMessage(pattern=r'^\.بصمات$'))
@@ -85,7 +96,7 @@ def register(client):
             "🔖 **قائمة أوامر البصمات**\n\n"
             "• `.اضف بصمه [الاسم]`\n"
             "  └─ لحفظ الرسالة اللي رديت عليها باسم.\n\n"
-            "• `.بصمه [الاسم]`\n"
+            "• `.بصمه [الاسم]` أو `.اسم البصمه [الاسم]`\n"
             "  └─ إرسال البصمة حسب الاسم.\n\n"
             "• `.بصماتي`\n"
             "  └─ عرض كل البصمات المحفوظة.\n\n"
@@ -95,7 +106,7 @@ def register(client):
             "  └─ كم بصمة محفوظة حالياً.\n\n"
             "• `.بصمات`\n"
             "  └─ عرض هذه القائمة.\n\n"
-            "**• الحد الأقصى:** `200 بصمة لكل محادثة` ✅"
+            "**• الحد الأقصى:** `200 بصمة محفوظة` ✅"
         )
         await event.reply(text, parse_mode='md')
 
