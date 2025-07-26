@@ -11,6 +11,11 @@ pip install -r requirements.txt
 sudo apt-get install ffmpeg
 ```
 
+If the bot shows the message `❌ برنامج ffmpeg غير مثبت. قم بتثبيته ثم حاول مجدداً.`,
+it means that `ffmpeg` could not be found. Install it using the command above on
+Debian/Ubuntu, or follow the instructions for your operating system from the
+[FFmpeg downloads page](https://ffmpeg.org/download.html).
+
 ## Configuration
 
 Edit `config.py` and set the following values with your Telegram credentials:
