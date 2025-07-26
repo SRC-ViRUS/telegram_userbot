@@ -164,6 +164,8 @@ async def ultra_long_scary_hack(event):
 #_______ازعاج ايموجي ________from telethon import TelegramClient, events
 from telethon import events, functions, types
 
+reaction_map = {}  # user_id: emoji
+
 @client.on(events.NewMessage(pattern=r"^\.ازعاج(.+)"))
 async def enable_reaction(event):
     if not event.is_reply:
@@ -171,7 +173,7 @@ async def enable_reaction(event):
         return
 
     try:
-        await event.delete()  # حذف رسالة الأمر فوراً
+        await event.delete()
     except:
         pass
 
@@ -179,8 +181,7 @@ async def enable_reaction(event):
     replied = await event.get_reply_message()
     user_id = replied.sender_id
 
-    reaction_map[str(user_id)] = emoji
-    save_state()
+    reaction_map[user_id] = emoji
     await event.reply(f"✅ تم تفعيل الإزعاج بـ {emoji} لهذا المستخدم.", delete_in=3)
 
 @client.on(events.NewMessage(pattern=r"^\.لاتزعج$"))
@@ -190,37 +191,34 @@ async def disable_reaction(event):
         return
 
     try:
-        await event.delete()  # حذف رسالة الأمر فوراً
+        await event.delete()
     except:
         pass
 
     replied = await event.get_reply_message()
     user_id = replied.sender_id
 
-    if str(user_id) in reaction_map:
-        del reaction_map[str(user_id)]
-        save_state()
+    if user_id in reaction_map:
+        del reaction_map[user_id]
         await event.reply("🛑 تم إيقاف الإزعاج لهذا الشخص.", delete_in=3)
     else:
         await event.reply("ℹ️ هذا الشخص ما مفعّل عليه إزعاج.", delete_in=3)
 
 @client.on(events.NewMessage)
 async def auto_reaction(event):
-    if event.out:
-        return
-    sender = await event.get_sender()
-    emoji = reaction_map.get(str(sender.id))
-    if emoji:
-        try:
-            await client(
-                functions.messages.SendReactionRequest(
-                    peer=event.chat_id,
-                    msg_id=event.id,
-                    reaction=[types.InputReactionEmoji(emoticon=emoji)],
-                )
-            )
-        except Exception as e:
-            print(f"❌ خطأ أثناء إرسال التفاعل: {e}")
+    try:
+        if event.out or not event.sender_id or not event.is_private:
+            return
+
+        emoji = reaction_map.get(event.sender_id)
+        if emoji:
+            await client(functions.messages.SendReactionRequest(
+                peer=event.chat_id,
+                msg_id=event.id,
+                reaction=[types.InputReactionEmoji(emoticon=emoji)],
+            ))
+    except Exception as e:
+        print(f"❌ خطأ أثناء إرسال التفاعل: {e}")
 #_______________________
 from telethon import TelegramClient, events
 import datetime
