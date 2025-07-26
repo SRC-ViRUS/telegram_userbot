@@ -49,11 +49,13 @@ def register(client):
         save_fingerprints(fingerprints)
         await event.reply(f"↯︙تم حفظ البصمة باسم `{name}`.")
 
-    @client.on(events.NewMessage(pattern=r'^\.(?:بصمه|اسم البصمه) (.+)$'))
+    @client.on(events.NewMessage(pattern=r'^\.اسم البصمه (.+)$'))
     async def send_fingerprint(event):
         name = event.pattern_match.group(1).strip()
         if name not in fingerprints:
-            return await event.reply(f"↯︙لا توجد بصمة بهذا الاسم: `{name}`.")
+            await event.reply(f"↯︙لا توجد بصمة بهذا الاسم: `{name}`.")
+            return await event.delete()
+
         data = fingerprints[name]
         try:
             msg = await client.get_messages(data["chat"], ids=data["id"])
@@ -63,9 +65,10 @@ def register(client):
                 except FileReferenceExpiredError:
                     await send_media_safe(client, event.chat_id, msg.media, caption=msg.message or None)
             else:
-                await event.reply(msg.message or "")
+                await client.send_message(event.chat_id, msg.message or "")
         except Exception:
             await event.reply("↯︙فشل إرسال البصمة. قد تكون محذوفة.")
+        await event.delete()
 
     @client.on(events.NewMessage(pattern=r'^\.بصماتي$'))
     async def list_fingerprints(event):
@@ -96,7 +99,7 @@ def register(client):
             "🔖 **قائمة أوامر البصمات**\n\n"
             "• `.اضف بصمه [الاسم]`\n"
             "  └─ لحفظ الرسالة اللي رديت عليها باسم.\n\n"
-            "• `.بصمه [الاسم]` أو `.اسم البصمه [الاسم]`\n"
+            "• `.اسم البصمه [الاسم]`\n"
             "  └─ إرسال البصمة حسب الاسم.\n\n"
             "• `.بصماتي`\n"
             "  └─ عرض كل البصمات المحفوظة.\n\n"
