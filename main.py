@@ -831,24 +831,26 @@ async def user_info(event):
 @client.on(events.NewMessage(pattern=r'^\.غادر$'))
 async def leave_group(event):
     if not await is_owner(event):
-        return await event.reply("🚫 مو انت صاحب البوت.")
+        return
     if not (event.is_group or event.is_channel):
-        return await event.reply("❌ هذا الأمر يعمل فقط داخل القروبات أو القنوات.")
+        return
 
     chat = await event.get_chat()
-    await event.reply(f"🚪 جارٍ مغادرة: {getattr(chat, 'title', 'الدردشة')}")
-
     try:
+        input_peer = await event.get_input_chat()
+        await client(functions.messages.DeleteHistoryRequest(peer=input_peer, max_id=0, revoke=False))
+
         if event.is_channel or getattr(chat, 'megagroup', False):
-            input_chat = await event.get_input_chat()
-            await client(functions.channels.LeaveChannelRequest(channel=input_chat))
+            await client(functions.channels.LeaveChannelRequest(channel=input_peer))
         else:
             await client(functions.messages.DeleteChatUserRequest(chat_id=chat.id, user_id='me'))
     except Exception as e:
-        await event.reply(f"❌ فشل المغادرة: {str(e)}")
+        await client.send_message("me", f"❌ فشل المغادرة: {e}")
+    finally:
+        await event.delete()
 
 
-@client.on(events.NewMessage(pattern=r'^\.تحويل (فيديو|بصمه|صوت)$'))
+@client.on(events.NewMessage(pattern=r'^\.تحويل\s+(فيديو|بصمه|صوت)$'))
 async def convert_media(event):
     if not await is_owner(event):
         return
@@ -866,21 +868,20 @@ async def convert_media(event):
     try:
         if target == 'بصمه':
             dst_file = dst + '.ogg'
-            cmd = [
-                'ffmpeg', '-y', '-i', src,
-                '-vn', '-c:a', 'libopus', '-b:a', '96k', dst_file
-            ]
-            subprocess.run(cmd, check=True)
-            await client.send_file(event.chat_id, dst_file, voice_note=True)
+            cmd = ['ffmpeg', '-y', '-i', src, '-vn', '-c:a', 'libopus', '-b:a', '96k', dst_file]
         elif target == 'صوت':
             dst_file = dst + '.mp3'
             cmd = ['ffmpeg', '-y', '-i', src, '-vn', '-c:a', 'libmp3lame', '-b:a', '128k', dst_file]
-            subprocess.run(cmd, check=True)
-            await client.send_file(event.chat_id, dst_file)
         else:  # فيديو
             dst_file = dst + '.mp4'
             cmd = ['ffmpeg', '-y', '-i', src, '-c:v', 'libx264', '-c:a', 'aac', dst_file]
-            subprocess.run(cmd, check=True)
+
+        proc = await asyncio.create_subprocess_exec(*cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        await proc.communicate()
+
+        if target == 'بصمه':
+            await client.send_file(event.chat_id, dst_file, voice_note=True)
+        else:
             await client.send_file(event.chat_id, dst_file)
         await event.delete()
     except Exception as e:
