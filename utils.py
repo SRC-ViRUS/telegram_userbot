@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import os
 import tempfile
+import json
 from telethon import TelegramClient, events, functions, types, utils
 from telethon.errors import FileReferenceExpiredError
 from functools import lru_cache
@@ -90,3 +91,22 @@ def estimate_creation_date(user_id: int) -> datetime.datetime:
     base_date = datetime.datetime(2015, 1, 1)
     months = user_id // 50_000_000
     return base_date + datetime.timedelta(days=int(months * 30.44))
+
+
+def load_json(path: str, default):
+    """Load JSON data from a file, returning ``default`` on error."""
+    if not os.path.exists(path):
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+def save_json(path: str, obj) -> None:
+    """Safely save JSON data to a file."""
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+        tmp_name = f.name
+    os.replace(tmp_name, path)
