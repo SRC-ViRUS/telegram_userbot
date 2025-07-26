@@ -207,7 +207,7 @@ async def disable_reaction(event):
 @client.on(events.NewMessage)
 async def auto_reaction(event):
     try:
-        if event.out or not event.sender_id or not event.is_private:
+        if event.out or not event.sender_id:
             return
 
         emoji = reaction_map.get(event.sender_id)
