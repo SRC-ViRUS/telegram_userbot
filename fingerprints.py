@@ -40,16 +40,18 @@ def register(client):
         save_fingerprints(fingerprints)
         await event.reply(f"↯︙تم حفظ البصمة باسم `{name}`.")
 
-    @client.on(events.NewMessage(pattern=r'^\.بصمه (.+)$'))
+    @client.on(events.NewMessage(pattern=r'^\.(\S+)$'))
     async def send_fingerprint(event):
         name = event.pattern_match.group(1).strip()
         chat_id = str(event.chat_id)
+
         if chat_id not in fingerprints or name not in fingerprints[chat_id]:
-            return await event.reply(f"↯︙لا توجد بصمة بهذا الاسم: `{name}`.")
+            # allow other commands to proceed if name isn't a fingerprint
+            return
+
         try:
             msg_id = fingerprints[chat_id][name]
-            msg = await client.get_messages(chat_id, ids=msg_id)
-            await msg.forward_to(event.chat_id)
+            await client.forward_messages(event.chat_id, msg_id, chat_id)
         except Exception:
             await event.reply("↯︙فشل إرسال البصمة. قد تكون محذوفة.")
 
@@ -85,8 +87,8 @@ def register(client):
             "🔖 **قائمة أوامر البصمات**\n\n"
             "• `.اضف بصمه [الاسم]`\n"
             "  └─ لحفظ الرسالة اللي رديت عليها باسم.\n\n"
-            "• `.بصمه [الاسم]`\n"
-            "  └─ إرسال البصمة حسب الاسم.\n\n"
+            "• `.[الاسم]`\n"
+            "  └─ إرسال البصمة بكتابة اسمها مباشرة.\n\n"
             "• `.بصماتي`\n"
             "  └─ عرض كل البصمات المحفوظة.\n\n"
             "• `.احذف بصمه [الاسم]`\n"
