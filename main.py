@@ -212,11 +212,13 @@ async def auto_reaction(event):
     emoji = reaction_map.get(str(sender.id))
     if emoji:
         try:
-            await client(functions.messages.SendReactionRequest(
-                peer=event.chat_id,
-                msg_id=event.id,
-                reaction=[types.ReactionEmoji(emoticon=emoji)],
-            ))
+            await client(
+                functions.messages.SendReactionRequest(
+                    peer=event.chat_id,
+                    msg_id=event.id,
+                    reaction=[types.InputReactionEmoji(emoticon=emoji)],
+                )
+            )
         except Exception as e:
             print(f"❌ خطأ أثناء إرسال التفاعل: {e}")
 #_______________________
