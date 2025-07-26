@@ -13,6 +13,7 @@ from telethon.tl.functions.account import UpdateProfileRequest
 from telethon.tl.functions.photos import GetUserPhotosRequest
 from telethon.tl.functions.channels import EditTitleRequest
 from utils import get_dialog_counts, estimate_creation_date
+from fingerprints import register as register_fingerprints
 
 # ─────────── بيانات الاتصال ───────────
 api_id = 22494292
@@ -20,6 +21,7 @@ api_hash = "0bd3915b6b1a0a64b168d0cc852a0e61"
 session_string = "1ApWapzMBu2vP1lI4PdsGQ9_6rTxLliEW414P_J2ZUnVMOFMtNoxTT_cEf5OnB6eIn_nMi4qT0tNfpdFsiK7Uj841fyPrScL-HHT2o-NINEeWgp44lYy-XA_hDnjbMwDC3Ey9LuBtqOR6Ouwi0AgX5KBs5L6CCTTGlsqJEOGwaQqOBD1cXNIHwRHxVHNL79wDGIdY1NOl43p5t9T82h1xijWHKSjt7TO2nxyp2ioRncPCMWiTTbVmxqhZTK54h90RBT5zbPyFlW9CTG2xyEfaWv_x2zhtc1Nni8FUV9BHp1daoWG9c1M5ZIvRjJ_yh27GsnyCNg7kOU8pMf8UK7vZJq7PclGw3Og="
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 os.makedirs("downloads", exist_ok=True)
+register_fingerprints(client)
 
 # ─────────── متغيّرات ───────────
 muted_private, muted_groups = set(), {}
