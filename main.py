@@ -5,7 +5,7 @@
 حقوق النشر: © 2025 الصعب. جميع الحقوق محفوظة.
 """
 
-import os, asyncio, datetime, random, tempfile
+import os, asyncio, datetime, random, tempfile, subprocess
 from telethon import TelegramClient, events, utils, types
 from telethon.sessions import StringSession
 from telethon.errors import FileReferenceExpiredError
@@ -834,12 +834,66 @@ async def leave_group(event):
         return await event.reply("🚫 مو انت صاحب البوت.")
     if not (event.is_group or event.is_channel):
         return await event.reply("❌ هذا الأمر يعمل فقط داخل القروبات أو القنوات.")
+
+    chat = await event.get_chat()
+    await event.reply(f"🚪 جارٍ مغادرة: {getattr(chat, 'title', 'الدردشة')}")
+
     try:
-        chat = await event.get_chat()
-        await event.reply(f"🚪 جارٍ مغادرة: {chat.title}")
-        await client(functions.channels.LeaveChannelRequest(chat.id))
+        if event.is_channel or getattr(chat, 'megagroup', False):
+            input_chat = await event.get_input_chat()
+            await client(functions.channels.LeaveChannelRequest(channel=input_chat))
+        else:
+            await client(functions.messages.DeleteChatUserRequest(chat_id=chat.id, user_id='me'))
     except Exception as e:
         await event.reply(f"❌ فشل المغادرة: {str(e)}")
+
+
+@client.on(events.NewMessage(pattern=r'^\.تحويل (فيديو|بصمه|صوت)$'))
+async def convert_media(event):
+    if not await is_owner(event):
+        return
+    if not event.is_reply:
+        return await event.reply("↯︙يجب الرد على فيديو أو صوت.")
+
+    target = event.pattern_match.group(1)
+    reply = await event.get_reply_message()
+    if not reply.media:
+        return await event.reply("↯︙الرسالة لا تحتوي ميديا.")
+
+    src = await reply.download_media(file=tempfile.mktemp())
+    dst = tempfile.mktemp()
+
+    try:
+        if target == 'بصمه':
+            dst_file = dst + '.ogg'
+            cmd = [
+                'ffmpeg', '-y', '-i', src,
+                '-vn', '-c:a', 'libopus', '-b:a', '96k', dst_file
+            ]
+            subprocess.run(cmd, check=True)
+            await client.send_file(event.chat_id, dst_file, voice_note=True)
+        elif target == 'صوت':
+            dst_file = dst + '.mp3'
+            cmd = ['ffmpeg', '-y', '-i', src, '-vn', '-c:a', 'libmp3lame', '-b:a', '128k', dst_file]
+            subprocess.run(cmd, check=True)
+            await client.send_file(event.chat_id, dst_file)
+        else:  # فيديو
+            dst_file = dst + '.mp4'
+            cmd = ['ffmpeg', '-y', '-i', src, '-c:v', 'libx264', '-c:a', 'aac', dst_file]
+            subprocess.run(cmd, check=True)
+            await client.send_file(event.chat_id, dst_file)
+        await event.delete()
+    except Exception as e:
+        await event.reply(f"❌ خطأ في التحويل: {e}")
+    finally:
+        try:
+            os.remove(src)
+        except Exception:
+            pass
+        try:
+            os.remove(dst_file)
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     asyncio.run(main())
