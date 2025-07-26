@@ -6,6 +6,9 @@ Create a virtual environment if desired and install the required packages:
 
 ```bash
 pip install -r requirements.txt
+# You also need ffmpeg installed and available in your PATH
+# For Debian/Ubuntu you can run:
+sudo apt-get install ffmpeg
 ```
 
 ## Configuration
