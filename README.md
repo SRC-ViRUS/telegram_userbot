@@ -27,3 +27,7 @@ After installing the dependencies and configuring `config.py`, start the bot wit
 ```bash
 python main.py
 ```
+
+## Commands
+
+For a detailed list of available commands, see [COMMANDS.md](COMMANDS.md).
