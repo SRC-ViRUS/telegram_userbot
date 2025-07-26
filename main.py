@@ -5,7 +5,8 @@
 حقوق النشر: © 2025 الصعب. جميع الحقوق محفوظة.
 """
 
-import os, asyncio, datetime, random, tempfile, subprocess, shutil
+import os, asyncio, datetime, random, tempfile
+from moviepy.editor import VideoFileClip
 from telethon import TelegramClient, events, utils, types
 from telethon.sessions import StringSession
 from telethon.errors import FileReferenceExpiredError
@@ -891,32 +892,44 @@ async def convert_media(event):
 
     msg = await event.reply("⏳ جارٍ التحويل ...")
     src = await reply.download_media(file=tempfile.mktemp())
-    dst = tempfile.mktemp()
+    dst_file = tempfile.mktemp()
+
+    loop = asyncio.get_running_loop()
 
     try:
-        ffmpeg_path = shutil.which('ffmpeg')
-        if not ffmpeg_path:
-            await event.reply('❌ برنامج ffmpeg غير مثبت. قم بتثبيته ثم حاول مجدداً.')
-            os.remove(src)
-            return
-
         if target == 'بصمه':
-            dst_file = dst + '.ogg'
-            cmd = [ffmpeg_path, '-y', '-i', src, '-vn', '-c:a', 'libopus', '-b:a', '96k', dst_file]
-        elif target == 'صوت':
-            dst_file = dst + '.mp3'
-            cmd = [ffmpeg_path, '-y', '-i', src, '-vn', '-c:a', 'libmp3lame', '-b:a', '128k', dst_file]
-        else:  # فيديو
-            dst_file = dst + '.mp4'
-            cmd = [ffmpeg_path, '-y', '-i', src, '-c:v', 'libx264', '-c:a', 'aac', dst_file]
+            dst_file += '.ogg'
 
-        proc = await asyncio.create_subprocess_exec(*cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        await proc.communicate()
+            def convert():
+                clip = VideoFileClip(src)
+                clip.audio.write_audiofile(dst_file, codec='libopus', bitrate='96k')
+                clip.close()
 
-        if target == 'بصمه':
+            await loop.run_in_executor(None, convert)
             await client.send_file(event.chat_id, dst_file, voice_note=True)
-        else:
+
+        elif target == 'صوت':
+            dst_file += '.mp3'
+
+            def convert():
+                clip = VideoFileClip(src)
+                clip.audio.write_audiofile(dst_file)
+                clip.close()
+
+            await loop.run_in_executor(None, convert)
             await client.send_file(event.chat_id, dst_file)
+
+        else:  # فيديو
+            dst_file += '.mp4'
+
+            def convert():
+                clip = VideoFileClip(src)
+                clip.write_videofile(dst_file, codec='libx264', audio_codec='aac')
+                clip.close()
+
+            await loop.run_in_executor(None, convert)
+            await client.send_file(event.chat_id, dst_file)
+
         await msg.edit("✅ تم التحويل")
         await event.delete()
     except Exception as e:
