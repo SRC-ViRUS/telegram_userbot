@@ -5,7 +5,7 @@
 حقوق النشر: © 2025 الصعب. جميع الحقوق محفوظة.
 """
 
-import os, asyncio, datetime, random, tempfile, subprocess
+import os, asyncio, datetime, random, tempfile, subprocess, shutil
 from telethon import TelegramClient, events, utils, types
 from telethon.sessions import StringSession
 from telethon.errors import FileReferenceExpiredError
@@ -869,19 +869,24 @@ async def convert_media(event):
     if not reply.media:
         return await event.reply("↯︙الرسالة لا تحتوي ميديا.")
 
+    ffmpeg_path = shutil.which('ffmpeg')
+    if not ffmpeg_path:
+        return await event.reply('❌ برنامج ffmpeg غير مثبت. قم بتثبيته ثم حاول مجدداً.')
+
     src = await reply.download_media(file=tempfile.mktemp())
     dst = tempfile.mktemp()
 
     try:
+
         if target == 'بصمه':
             dst_file = dst + '.ogg'
-            cmd = ['ffmpeg', '-y', '-i', src, '-vn', '-c:a', 'libopus', '-b:a', '96k', dst_file]
+            cmd = [ffmpeg_path, '-y', '-i', src, '-vn', '-c:a', 'libopus', '-b:a', '96k', dst_file]
         elif target == 'صوت':
             dst_file = dst + '.mp3'
-            cmd = ['ffmpeg', '-y', '-i', src, '-vn', '-c:a', 'libmp3lame', '-b:a', '128k', dst_file]
+            cmd = [ffmpeg_path, '-y', '-i', src, '-vn', '-c:a', 'libmp3lame', '-b:a', '128k', dst_file]
         else:  # فيديو
             dst_file = dst + '.mp4'
-            cmd = ['ffmpeg', '-y', '-i', src, '-c:v', 'libx264', '-c:a', 'aac', dst_file]
+            cmd = [ffmpeg_path, '-y', '-i', src, '-c:v', 'libx264', '-c:a', 'aac', dst_file]
 
         proc = await asyncio.create_subprocess_exec(*cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         await proc.communicate()
