@@ -6,15 +6,10 @@ Create a virtual environment if desired and install the required packages:
 
 ```bash
 pip install -r requirements.txt
-# You also need ffmpeg installed and available in your PATH
-# For Debian/Ubuntu you can run:
-sudo apt-get install ffmpeg
 ```
 
-If the bot shows the message `❌ برنامج ffmpeg غير مثبت. قم بتثبيته ثم حاول مجدداً.`,
-it means that `ffmpeg` could not be found. Install it using the command above on
-Debian/Ubuntu, or follow the instructions for your operating system from the
-[FFmpeg downloads page](https://ffmpeg.org/download.html).
+All required libraries will be installed from `pip`, including an internal
+`ffmpeg` binary used by `moviepy`, so no extra system packages are needed.
 
 ## Configuration
 
