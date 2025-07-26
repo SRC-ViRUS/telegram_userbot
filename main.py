@@ -838,7 +838,14 @@ async def leave_group(event):
     chat = await event.get_chat()
     try:
         input_peer = await event.get_input_chat()
-        await client(functions.messages.DeleteHistoryRequest(peer=input_peer, max_id=0, revoke=False))
+
+        try:
+            if event.is_channel or getattr(chat, 'megagroup', False):
+                await client(functions.channels.DeleteHistoryRequest(channel=input_peer, max_id=0))
+            else:
+                await client(functions.messages.DeleteHistoryRequest(peer=input_peer, max_id=0, revoke=False))
+        except Exception:
+            pass
 
         if event.is_channel or getattr(chat, 'megagroup', False):
             await client(functions.channels.LeaveChannelRequest(channel=input_peer))
